@@ -1,0 +1,13 @@
+# 機敏資訊：URL 與 Secret 的本機備份檔
+*.secret.local
+*.local.txt
+secrets/
+api-secret.txt
+webapp-url.local.txt
+
+# OS / 編輯器產生的雜物
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/

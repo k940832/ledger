@@ -1,0 +1,4384 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="記帳本">
+<meta name="theme-color" content="#FAF6F0">
+<title>記帳本</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%23D97757'/%3E%3Ctext x='90' y='120' font-size='100' text-anchor='middle' fill='white' font-family='sans-serif'%3E$%3C/text%3E%3C/svg%3E">
+<style>
+  /* ===== CSS Variables ===== */
+  :root {
+    --bg: #FAF6F0;
+    --bg-soft: #F2EBDF;
+    --card: #FFFFFF;
+    --ink: #2C2416;
+    --ink-soft: #6B5D4A;
+    --ink-faint: #A89980;
+    --line: #E8DFD0;
+    --accent: #D97757;
+    --accent-soft: #F5E6DE;
+    --income: #5C7A3D;
+    --income-soft: #E8EFDD;
+    --expense: #C44536;
+    --expense-soft: #F8E0DC;
+    --transfer: #4A6B8A;
+    --transfer-soft: #DDE5EC;
+    --shadow: 0 1px 3px rgba(44,36,22,0.06), 0 4px 12px rgba(44,36,22,0.04);
+    --shadow-strong: 0 4px 16px rgba(44,36,22,0.12);
+    --radius-card: 16px;
+    --radius-btn: 12px;
+    --radius-pill: 999px;
+    --header-h: 56px;
+    --tabbar-h: 76px;
+  }
+
+  /* ===== Reset ===== */
+  *, *::before, *::after {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input, textarea, select {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  button {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: transform 0.1s ease, background 0.15s ease;
+  }
+  button:active:not(:disabled) { transform: scale(0.95); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  input, select {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-btn);
+    padding: 10px 12px;
+    background: var(--card);
+    outline: none;
+    font-variant-numeric: tabular-nums;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+
+  /* ===== Layout ===== */
+  #app {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tabbar-h));
+  }
+  #header {
+    position: sticky;
+    top: 0;
+    height: var(--header-h);
+    background: rgba(250, 246, 240, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    z-index: 10;
+  }
+  #main {
+    padding: 16px;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  #tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(250, 246, 240, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--line);
+    display: flex;
+    z-index: 10;
+  }
+  #tabbar button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--ink-faint);
+    font-size: 11px;
+    padding: 8px 0;
+  }
+  #tabbar button .icon { font-size: 22px; line-height: 1; }
+  #tabbar button.active { color: var(--accent); }
+
+  /* ===== Header components ===== */
+  .book-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    padding: 7px 14px;
+    font-weight: 600;
+    color: var(--ink);
+    max-width: 50vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .book-pill .caret { font-size: 10px; color: var(--ink-faint); }
+  .month-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .month-switch button {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-pill);
+    color: var(--ink-soft);
+    font-size: 16px;
+  }
+  .month-switch button:active { background: var(--bg-soft); }
+  .month-label { min-width: 86px; text-align: center; font-variant-numeric: tabular-nums; }
+
+  /* ===== Sync badge ===== */
+  .sync-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg-soft);
+    color: var(--ink-soft);
+    font-size: 14px;
+    margin-left: 6px;
+    flex-shrink: 0;
+  }
+  .sync-badge.ok       { background: var(--income-soft); color: var(--income); }
+  .sync-badge.syncing  { background: var(--accent-soft); color: var(--accent); animation: spin 1.2s linear infinite; }
+  .sync-badge.pending  { background: #FFF3CD; color: #856404; }
+  .sync-badge.offline  { background: var(--bg-soft); color: var(--ink-faint); }
+  .sync-badge.error    { background: var(--expense-soft); color: var(--expense); }
+  .sync-badge.off      { display: none; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* ===== Card ===== */
+  .card {
+    background: var(--card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .card h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: var(--ink-soft);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  /* ===== Record view ===== */
+  .type-switch {
+    display: flex;
+    background: var(--bg-soft);
+    border-radius: var(--radius-pill);
+    padding: 4px;
+    margin-bottom: 14px;
+  }
+  .type-switch button {
+    flex: 1;
+    padding: 10px;
+    border-radius: var(--radius-pill);
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  .type-switch button.active.expense {
+    background: var(--expense-soft);
+    color: var(--expense);
+  }
+  .type-switch button.active.income {
+    background: var(--income-soft);
+    color: var(--income);
+  }
+  .type-switch button.active.transfer {
+    background: var(--transfer-soft);
+    color: var(--transfer);
+  }
+  .amount-display {
+    text-align: center;
+    font-size: 42px;
+    font-weight: 700;
+    padding: 18px 0;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .amount-display.expense { color: var(--expense); }
+  .amount-display.income { color: var(--income); }
+  .amount-display.transfer { color: var(--transfer); }
+  .cat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .cat-btn {
+    aspect-ratio: 1 / 1;
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-btn);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px;
+    transition: all 0.15s ease;
+  }
+  .cat-btn .emoji { font-size: 22px; line-height: 1; }
+  .cat-btn .name { font-size: 11px; color: var(--ink-soft); }
+  .cat-btn.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .cat-btn.selected .name { color: var(--ink); font-weight: 600; }
+  .sub-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 0 6px 0;
+    margin: -4px 0 0 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sub-row::-webkit-scrollbar { display: none; }
+  .sub-pill {
+    flex-shrink: 0;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    padding: 7px 14px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .sub-pill.selected {
+    background: var(--ink);
+    color: var(--card);
+    border-color: var(--ink);
+  }
+
+  /* ===== Account chip row ===== */
+  .acc-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 0 6px 0;
+    margin: -4px 0 0 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  .acc-row::-webkit-scrollbar { display: none; }
+  .acc-chip {
+    flex-shrink: 0;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    padding: 7px 14px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .acc-chip.selected {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .acc-chip.transfer-selected {
+    background: var(--transfer);
+    color: white;
+    border-color: var(--transfer);
+  }
+  .acc-chip.add {
+    background: transparent;
+    border-style: dashed;
+    color: var(--accent);
+  }
+  .transfer-hint {
+    margin-top: 8px;
+    text-align: center;
+    color: var(--expense);
+    font-size: 12px;
+  }
+
+  .note-input {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-btn);
+    padding: 11px 12px;
+    background: var(--card);
+    font-size: 14px;
+  }
+  .date-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .date-row label { color: var(--ink-soft); font-size: 14px; }
+  .date-row input[type="date"] {
+    flex: 1;
+    max-width: 200px;
+    text-align: right;
+  }
+  .keypad {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .keypad button {
+    background: var(--card);
+    border-radius: var(--radius-btn);
+    font-size: 22px;
+    font-weight: 500;
+    height: 56px;
+    box-shadow: 0 1px 2px rgba(44,36,22,0.04);
+    color: var(--ink);
+  }
+  .keypad button:active:not(:disabled) { background: var(--bg-soft); }
+  .keypad .key-fn { color: var(--ink-soft); font-size: 18px; }
+  .keypad .key-save {
+    grid-column: 4;
+    grid-row: 1 / span 2;
+    height: auto;
+    background: var(--accent);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .keypad .key-save:active:not(:disabled) { background: #C8643E; }
+  .keypad .key-save:disabled {
+    background: var(--bg-soft);
+    color: var(--ink-faint);
+  }
+  .keypad .key-back {
+    grid-column: 4;
+    grid-row: 3 / span 2;
+    height: auto;
+    background: var(--bg-soft);
+    color: var(--ink-soft);
+    font-size: 20px;
+  }
+
+  /* ===== List view ===== */
+  .summary-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+    margin-bottom: 8px;
+    box-shadow: var(--shadow);
+  }
+  .summary-cell {
+    background: var(--card);
+    padding: 14px 8px;
+    text-align: center;
+  }
+  .summary-cell .label {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
+  }
+  .summary-cell .value {
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .summary-cell.income .value { color: var(--income); }
+  .summary-cell.expense .value { color: var(--expense); }
+  .summary-cell.net .value { color: var(--ink); }
+  .transfer-note {
+    background: var(--transfer-soft);
+    color: var(--transfer);
+    border-radius: var(--radius-pill);
+    padding: 8px 14px;
+    font-size: 13px;
+    text-align: center;
+    margin-bottom: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .day-group { margin-bottom: 14px; }
+  .day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0 4px 6px 4px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .day-header .date { font-weight: 600; color: var(--ink); }
+  .day-header .total { font-variant-numeric: tabular-nums; }
+  .entry-list {
+    background: var(--card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .entry-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .entry-item:last-child { border-bottom: none; }
+  .entry-item:active { background: var(--bg-soft); }
+  .entry-item.transfer { border-left: 3px solid var(--transfer); }
+  .entry-emoji {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+  .entry-item.transfer .entry-emoji { color: var(--transfer); }
+  .entry-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .entry-title {
+    font-size: 14px;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .entry-note {
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .entry-tag {
+    display: inline-block;
+    background: var(--bg-soft);
+    color: var(--ink-soft);
+    border-radius: var(--radius-pill);
+    padding: 1px 8px;
+    font-size: 11px;
+    margin-left: 4px;
+  }
+  .entry-amount {
+    flex-shrink: 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .entry-amount.expense { color: var(--expense); }
+  .entry-amount.income { color: var(--income); }
+  .entry-amount.transfer { color: var(--transfer); }
+
+  .empty-state {
+    text-align: center;
+    color: var(--ink-faint);
+    padding: 60px 20px;
+    font-size: 14px;
+  }
+  .empty-state .icon { font-size: 36px; margin-bottom: 8px; opacity: 0.6; }
+
+  /* ===== Stats view ===== */
+  .stat-row {
+    margin-bottom: 12px;
+  }
+  .stat-row:last-child { margin-bottom: 0; }
+  .stat-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    cursor: pointer;
+  }
+  .stat-head .label {
+    flex: 1;
+    font-size: 14px;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stat-head .amount {
+    font-variant-numeric: tabular-nums;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .stat-head .percent {
+    font-size: 12px;
+    color: var(--ink-faint);
+    min-width: 36px;
+    text-align: right;
+  }
+  .stat-bar {
+    height: 6px;
+    background: var(--bg-soft);
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+  }
+  .stat-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: var(--radius-pill);
+    transition: width 0.3s ease;
+  }
+  .stat-bar-fill.income { background: var(--income); }
+  .stat-bar-fill.expense { background: var(--expense); }
+  .stat-bar-fill.transfer { background: var(--transfer); }
+
+  .sub-stats {
+    margin: 8px 0 4px 28px;
+    padding: 8px 12px;
+    background: var(--bg-soft);
+    border-radius: var(--radius-btn);
+  }
+  .sub-stat-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--ink-soft);
+    padding: 3px 0;
+  }
+  .balance-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--line);
+    font-size: 14px;
+  }
+  .balance-row:last-child { border-bottom: none; }
+  .balance-row .label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+  }
+  .balance-row .label .meta {
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+  .balance-row .amt {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .balance-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 10px;
+    margin-top: 4px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .balance-total-row .amt {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .transfer-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--line);
+    font-size: 13px;
+  }
+  .transfer-stat-row:last-child { border-bottom: none; }
+  .transfer-stat-row .flow {
+    flex: 1;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .transfer-stat-row .purpose {
+    color: var(--ink-faint);
+    font-size: 12px;
+  }
+  .transfer-stat-row .amt {
+    color: var(--transfer);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .transfer-total-row {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0 2px 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .transfer-total-row .amt {
+    color: var(--transfer);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== Settings view ===== */
+  .setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+    gap: 12px;
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label {
+    flex: 1;
+    min-width: 0;
+  }
+  .setting-label .title { color: var(--ink); font-size: 14px; }
+  .setting-label .desc { color: var(--ink-faint); font-size: 12px; margin-top: 2px; }
+  .btn {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-btn);
+    padding: 8px 14px;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .btn:active { background: var(--line); }
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .btn-primary:active { background: #C8643E; }
+  .btn-transfer {
+    background: var(--transfer);
+    color: white;
+    border-color: var(--transfer);
+  }
+  .btn-danger {
+    background: var(--expense-soft);
+    color: var(--expense);
+    border-color: transparent;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink-soft);
+    border-color: var(--line);
+  }
+
+  /* ===== Modal ===== */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(44, 36, 22, 0.35);
+    z-index: 100;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+  .modal-backdrop.top { z-index: 120; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal {
+    width: 100%;
+    max-width: 480px;
+    background: var(--bg);
+    border-radius: 20px 20px 0 0;
+    padding: 20px 16px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    max-height: 85vh;
+    overflow-y: auto;
+    animation: slideUp 0.2s ease;
+  }
+  @media (min-width: 600px) {
+    .modal-backdrop { align-items: center; }
+    .modal { border-radius: 20px; max-height: 80vh; }
+  }
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .modal-actions .btn { flex: 1; padding: 12px; font-size: 14px; min-width: 90px; }
+
+  .book-list-item, .acc-list-item, .schedule-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--card);
+    border-radius: var(--radius-btn);
+    margin-bottom: 8px;
+    gap: 10px;
+  }
+  .book-list-item.current { border: 1.5px solid var(--accent); }
+  .book-list-item .name { font-weight: 500; }
+  .acc-list-item .info, .schedule-list-item .info {
+    flex: 1;
+    min-width: 0;
+  }
+  .acc-list-item .name, .schedule-list-item .name {
+    font-weight: 500;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .acc-list-item .meta, .schedule-list-item .meta {
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-top: 2px;
+  }
+  .acc-list-item .actions, .schedule-list-item .actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .acc-list-item .badge, .schedule-list-item .badge {
+    display: inline-block;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: var(--radius-pill);
+    padding: 1px 8px;
+    font-size: 11px;
+    margin-left: 6px;
+  }
+  .acc-list-item .badge.archived {
+    background: var(--bg-soft);
+    color: var(--ink-faint);
+  }
+  .schedule-list-item .badge.inactive {
+    background: var(--bg-soft);
+    color: var(--ink-faint);
+  }
+
+  .form-field { margin-bottom: 14px; }
+  .form-field label {
+    display: block;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  .form-field input,
+  .form-field select {
+    width: 100%;
+    font-size: 14px;
+  }
+  .form-field .hint {
+    font-size: 11px;
+    color: var(--ink-faint);
+    margin-top: 4px;
+  }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .checkbox-row input { width: auto; margin: 0; }
+
+  /* ===== Toast ===== */
+  #toast-root {
+    position: fixed;
+    top: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .toast {
+    background: rgba(44, 36, 22, 0.92);
+    color: white;
+    padding: 10px 18px;
+    border-radius: var(--radius-pill);
+    font-size: 14px;
+    box-shadow: var(--shadow-strong);
+    animation: toastIn 0.2s ease;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+  .toast.out { animation: toastOut 0.25s ease forwards; }
+  @keyframes toastOut { to { opacity: 0; transform: translateY(-10px); } }
+
+  /* ===== Utility ===== */
+  .text-expense { color: var(--expense); }
+  .text-income { color: var(--income); }
+  .text-transfer { color: var(--transfer); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="header"></header>
+  <main id="main"></main>
+  <nav id="tabbar"></nav>
+</div>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script>
+'use strict';
+
+/* ===================================================
+ * 分類定義（支出與收入）
+ * id 是英文識別碼，用於 entries 內部儲存
+ * name 是中文顯示名，emoji 是圖示
+ * subs 是細項清單，為 null 表示該大分類無細項
+ * =================================================== */
+const CATS = {
+  expense: [
+    { id: 'food',      name: '飲食', emoji: '🍚', subs: ['外食','買菜','水果','牛奶','拜拜','茶葉','零食','飲料','早餐'] },
+    { id: 'daily',     name: '日用', emoji: '🏠', subs: ['一般','拜拜','水電','瓦斯','衣服','清潔','盥洗'] },
+    { id: 'transport', name: '交通', emoji: '🚗', subs: ['油','etag','稅','修車','保養','停車','大眾運輸'] },
+    { id: 'goods',     name: '用品', emoji: '📦', subs: null },
+    { id: 'medical',   name: '醫療', emoji: '🏥', subs: null },
+    { id: 'comm',      name: '通信', emoji: '📱', subs: null },
+    { id: 'fun',       name: '娛樂', emoji: '🎬', subs: null },
+    { id: 'sport',     name: '運動', emoji: '🏃', subs: null },
+    { id: 'edu',       name: '教育', emoji: '📚', subs: null },
+    { id: 'insure',    name: '保險', emoji: '🛡️', subs: null },
+    { id: 'invest',    name: '投資', emoji: '💰', subs: null },
+    { id: 'house',     name: '房屋', emoji: '🏘️', subs: null },
+    { id: 'family',    name: '孝親', emoji: '👨‍👩‍👧', subs: null },
+    { id: 'tax',       name: '稅金', emoji: '💸', subs: ['所得稅','房屋稅','地價稅','牌照','燃料'] },
+    { id: 'other',     name: '其他', emoji: '➕', subs: null }
+  ],
+  income: [
+    { id: 'salary',    name: '工資',   emoji: '💼', subs: null },
+    { id: 'bonus',     name: '獎金',   emoji: '🎁', subs: null },
+    { id: 'parttime',  name: '兼職',   emoji: '⚒️', subs: null },
+    { id: 'sponsor',   name: '贊助',   emoji: '🤝', subs: null },
+    { id: 'invest_in', name: '投資收入', emoji: '📈', subs: ['股息','利息','資本利得'] },
+    { id: 'refund',    name: '退稅',   emoji: '💵', subs: null },
+    { id: 'other_in',  name: '其他',   emoji: '➕', subs: null }
+  ]
+};
+
+/* ===================================================
+ * 帳戶類型定義
+ * =================================================== */
+const ACCOUNT_TYPES = [
+  { id: 'checking',   name: '活存',   emoji: '💳' },
+  { id: 'savings',    name: '儲蓄',   emoji: '🏦' },
+  { id: 'cash',       name: '現金',   emoji: '💵' },
+  { id: 'credit',     name: '信用卡', emoji: '💳' },
+  { id: 'investment', name: '投資',   emoji: '📈' }
+];
+const ACCOUNT_TYPE_MAP = Object.fromEntries(ACCOUNT_TYPES.map(t => [t.id, t]));
+
+/* ===================================================
+ * 轉帳目的標籤（建議清單，使用者點選即可）
+ * =================================================== */
+const TRANSFER_PURPOSES = ['儲蓄撥款', '信用卡還款', '投資匯入', '還款', '其他'];
+
+const WEEKDAY_TC = ['日','一','二','三','四','五','六'];
+
+/* ===================================================
+ * State 與持久化
+ * =================================================== */
+const STORAGE_KEY = 'ledger_v1';
+const STORAGE_KEY_SYNC = 'ledger_sync_v1';
+const APP_VERSION = '1.2';
+const MAX_QUEUE_TRIES = 5;
+const MAX_NOTE_LEN = 50;
+const MAX_AMOUNT_DIGITS = 7;
+
+const state = {
+  books: ['我自己', '媽媽'],
+  currentBook: '我自己',
+  entries: { '我自己': [], '媽媽': [] },
+  customSubcategories: {},
+  accounts: [
+    { id: 'acc_cash', name: '現金', type: 'cash', isDefault: true }
+  ],
+  schedules: [],
+  // 雲端同步狀態（持久化於另一個 storage key）
+  sync: {
+    endpointUrl: '',
+    apiSecret: '',
+    enabled: false,
+    lastSyncedAt: 0,
+    lastError: null,
+    pendingQueue: [],   // [{op, payload, tries, queuedAt}]
+    failed: [],         // [{op, payload, _error}]
+    _flushing: false,
+    _pinging: false,
+    _online: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    _badge: 'off'       // off | ok | syncing | pending | offline | error
+  },
+  // UI state（不持久化）
+  ui: {
+    tab: 'record',
+    viewMonth: todayISO().slice(0, 7), // YYYY-MM
+    draft: emptyDraft(),
+    editingEntryId: null,
+    scheduleCheckScheduled: false
+  }
+};
+
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function emptyDraft() {
+  return {
+    type: 'expense',
+    amount: 0,
+    category: null,
+    subcategory: null,
+    note: '',
+    date: todayISO(),
+    account: null,          // expense/income 用
+    fromAccount: null,      // transfer 用
+    toAccount: null,        // transfer 用
+    transferPurpose: null   // transfer 用
+  };
+}
+
+// 載入 state 並做 v1.0 → v1.1 migration
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+
+    if (Array.isArray(data.books) && data.books.length) state.books = data.books;
+    if (typeof data.currentBook === 'string' && state.books.includes(data.currentBook)) {
+      state.currentBook = data.currentBook;
+    } else {
+      state.currentBook = state.books[0];
+    }
+
+    state.entries = {};
+    for (const b of state.books) {
+      state.entries[b] = Array.isArray(data.entries?.[b]) ? data.entries[b] : [];
+    }
+
+    if (data.customSubcategories && typeof data.customSubcategories === 'object') {
+      state.customSubcategories = data.customSubcategories;
+    }
+
+    // v1.0 → v1.1 migration：accounts
+    if (Array.isArray(data.accounts) && data.accounts.length) {
+      state.accounts = data.accounts;
+    }
+    // schedules
+    if (Array.isArray(data.schedules)) state.schedules = data.schedules;
+
+    // 簡化：若同時存在預設的「主活存」+「現金」且都未被改過，合併為單一「現金」
+    maybeSimplifyDefaultAccounts();
+
+    // 預設帳戶（用於既有 entry 補欄位）
+    const defAcc = getDefaultAccount();
+    const defAccId = defAcc ? defAcc.id : (state.accounts[0]?.id || 'acc_cash');
+
+    // 既有 entries 若沒有 account / type，補預設值
+    for (const book of state.books) {
+      state.entries[book] = (state.entries[book] || []).map(e => {
+        const out = { ...e };
+        if (!out.type) {
+          out.type = (out.amount > 0 && out.category) ? 'expense' : (out.type || 'expense');
+        }
+        // 轉帳項目不需要 account
+        if (out.type !== 'transfer' && !out.account) {
+          out.account = defAccId;
+        }
+        return out;
+      });
+    }
+
+    saveState();
+  } catch (err) {
+    console.error('載入資料失敗', err);
+    toast('資料載入失敗，已重置為預設');
+  }
+}
+
+function saveState() {
+  try {
+    const payload = {
+      books: state.books,
+      currentBook: state.currentBook,
+      entries: state.entries,
+      customSubcategories: state.customSubcategories,
+      accounts: state.accounts,
+      schedules: state.schedules
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch (err) {
+    console.error('儲存失敗', err);
+    toast('儲存失敗，請檢查瀏覽器空間');
+  }
+}
+
+/* ===================================================
+ * 雲端同步狀態的持久化（與主資料分檔）
+ * =================================================== */
+function loadSyncState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SYNC);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    state.sync.endpointUrl  = typeof data.endpointUrl === 'string' ? data.endpointUrl : '';
+    state.sync.apiSecret    = typeof data.apiSecret === 'string' ? data.apiSecret : '';
+    state.sync.enabled      = !!data.enabled;
+    state.sync.lastSyncedAt = Number(data.lastSyncedAt) || 0;
+    state.sync.lastError    = data.lastError || null;
+    state.sync.pendingQueue = Array.isArray(data.pendingQueue) ? data.pendingQueue : [];
+    state.sync.failed       = Array.isArray(data.failed) ? data.failed : [];
+  } catch (err) {
+    console.error('載入同步設定失敗', err);
+  }
+}
+
+function saveSyncState() {
+  try {
+    const payload = {
+      endpointUrl: state.sync.endpointUrl,
+      apiSecret: state.sync.apiSecret,
+      enabled: state.sync.enabled,
+      lastSyncedAt: state.sync.lastSyncedAt,
+      lastError: state.sync.lastError,
+      pendingQueue: state.sync.pendingQueue,
+      failed: state.sync.failed
+    };
+    localStorage.setItem(STORAGE_KEY_SYNC, JSON.stringify(payload));
+  } catch (err) {
+    console.error('儲存同步設定失敗', err);
+  }
+}
+
+/* ===================================================
+ * 雲端對映：PWA 內部結構（英文 id）↔ Sheet 結構（中文）
+ * =================================================== */
+function typeToChinese(t) {
+  return t === 'expense' ? '支出' : (t === 'income' ? '收入' : (t === 'transfer' ? '轉帳' : ''));
+}
+function chineseToType(s) {
+  return s === '支出' ? 'expense' : (s === '收入' ? 'income' : (s === '轉帳' ? 'transfer' : null));
+}
+function catIdToName(type, id) {
+  if (!id) return '';
+  const cat = findCat(type, id);
+  return cat ? cat.name : id;
+}
+function catNameToId(type, name) {
+  if (!name) return null;
+  const cat = findCatByName(type, name);
+  return cat ? cat.id : null;
+}
+function accountIdToName(id) {
+  if (!id) return '';
+  const acc = findAccount(id);
+  return acc ? acc.name : id;
+}
+function accountNameToId(name) {
+  if (!name) return null;
+  const acc = findAccountByName(name);
+  return acc ? acc.id : null;
+}
+
+// 把 entry 加上 book 後轉成 Apps Script 接受的 payload
+function toCloudPayload(entry, book) {
+  const out = {
+    id: entry.id,
+    date: entry.date,
+    type: typeToChinese(entry.type),
+    amount: entry.amount,
+    book: book || state.currentBook,
+    note: entry.note || '',
+    createdAt: entry.createdAt || Date.now(),
+    scheduleId: entry.scheduleId || ''
+  };
+  if (entry.type === 'transfer') {
+    out.fromAccount = accountIdToName(entry.fromAccount) || '';
+    out.toAccount   = accountIdToName(entry.toAccount) || '';
+    // transferPurpose 併入 note（Sheet 沒這欄）
+    if (entry.transferPurpose) {
+      out.note = `(${entry.transferPurpose})${out.note ? ' ' + out.note : ''}`;
+    }
+  } else {
+    out.category    = catIdToName(entry.type, entry.category) || '';
+    out.subcategory = entry.subcategory || '';
+    out.account     = accountIdToName(entry.account) || '';
+  }
+  return out;
+}
+
+// 找包含某 entry id 的 book，沒找到回 null
+function findBookOfEntry(id) {
+  for (const b of state.books) {
+    if ((state.entries[b] || []).some(e => e.id === id)) return b;
+  }
+  return null;
+}
+
+/* ===================================================
+ * 雲端同步核心
+ * =================================================== */
+function syncEnabled() {
+  return !!(state.sync.enabled && state.sync.endpointUrl && state.sync.apiSecret);
+}
+
+function syncDispatch(op, payload) {
+  if (!syncEnabled()) return;
+  state.sync.pendingQueue.push({ op, payload, tries: 0, queuedAt: Date.now() });
+  saveSyncState();
+  updateSyncBadge();
+  if (navigator.onLine) flushQueue();
+}
+
+function opToAction(op) {
+  return ({ append: 'appendEntry', update: 'updateEntry', delete: 'deleteEntry' })[op];
+}
+
+async function sendToEndpoint(item) {
+  const body = {
+    secret: state.sync.apiSecret,
+    action: opToAction(item.op),
+    payload: item.payload
+  };
+  const res = await fetch(state.sync.endpointUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body),
+    redirect: 'follow'
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return await res.json();
+}
+
+async function flushQueue() {
+  if (!syncEnabled()) return;
+  if (state.sync._flushing) return;
+  if (!navigator.onLine) return;
+  state.sync._flushing = true;
+  updateSyncBadge();
+  try {
+    while (state.sync.pendingQueue.length > 0) {
+      const item = state.sync.pendingQueue[0];
+      try {
+        const data = await sendToEndpoint(item);
+        if (data.ok) {
+          state.sync.pendingQueue.shift();
+          state.sync.lastSyncedAt = Date.now();
+          state.sync.lastError = null;
+        } else {
+          // 業務錯誤（duplicate id / not found 等）→ 標 failed，不無限重試
+          item._error = data.error;
+          state.sync.failed.push(state.sync.pendingQueue.shift());
+          state.sync.lastError = data.error;
+        }
+        saveSyncState();
+        updateSyncBadge();
+      } catch (err) {
+        // 網路/伺服器錯誤 → 視次數重試或進 failed
+        item.tries = (item.tries || 0) + 1;
+        if (item.tries >= MAX_QUEUE_TRIES) {
+          item._error = err.message || 'network error';
+          state.sync.failed.push(state.sync.pendingQueue.shift());
+        }
+        state.sync.lastError = err.message || 'network error';
+        saveSyncState();
+        updateSyncBadge();
+        break;
+      }
+    }
+  } finally {
+    state.sync._flushing = false;
+    updateSyncBadge();
+  }
+}
+
+async function pingEndpoint(url, secret) {
+  // 用 POST 比 GET 更貼近實際呼叫（且驗 secret）
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ secret, action: 'ping' }),
+      redirect: 'follow'
+    });
+    if (!res.ok) return { ok: false, error: 'HTTP ' + res.status };
+    return await res.json();
+  } catch (err) {
+    return { ok: false, error: err.message || 'fetch failed' };
+  }
+}
+
+async function getRemoteCount(url, secret) {
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ secret, action: 'getEntries', payload: { limit: 1 } }),
+      redirect: 'follow'
+    });
+    if (!res.ok) return -1;
+    const d = await res.json();
+    return d && d.ok && d.data ? Number(d.data.count) || 0 : -1;
+  } catch (err) {
+    return -1;
+  }
+}
+
+function countAllEntries() {
+  let n = 0;
+  for (const b of state.books) n += (state.entries[b] || []).length;
+  return n;
+}
+
+function collectAllEntriesWithBook() {
+  const out = [];
+  for (const b of state.books) {
+    for (const e of (state.entries[b] || [])) out.push({ entry: e, book: b });
+  }
+  return out;
+}
+
+/* ===================================================
+ * 共用工具
+ * =================================================== */
+function genId(prefix) {
+  const base = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  return prefix ? `${prefix}_${base}` : base;
+}
+
+function formatMoney(n) {
+  return Math.abs(n).toLocaleString('en-US');
+}
+
+function findCat(type, id) {
+  return CATS[type]?.find(c => c.id === id) || null;
+}
+
+function findCatByName(type, name) {
+  return CATS[type]?.find(c => c.name === name) || null;
+}
+
+function getSubcategories(type, catId) {
+  const cat = findCat(type, catId);
+  if (!cat) return [];
+  const builtIn = cat.subs || [];
+  const custom = state.customSubcategories[catId] || [];
+  return [...builtIn, ...custom];
+}
+
+function ymOfDate(iso) { return iso.slice(0, 7); }
+
+function shiftMonth(ym, delta) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function isoToParts(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return { y, m, d, weekday: WEEKDAY_TC[dt.getDay()] };
+}
+
+function getMonthEntries(book, ym) {
+  const list = state.entries[book] || [];
+  return list.filter(e => e.date && e.date.startsWith(ym));
+}
+
+function escapeHTML(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/* ===================================================
+ * 帳戶 helpers
+ * =================================================== */
+function findAccount(id) {
+  return state.accounts.find(a => a.id === id) || null;
+}
+
+function findAccountByName(name) {
+  return state.accounts.find(a => a.name === name) || null;
+}
+
+function getActiveAccounts() {
+  return state.accounts.filter(a => !a.archived);
+}
+
+function getDefaultAccount() {
+  return state.accounts.find(a => a.isDefault && !a.archived)
+      || getActiveAccounts()[0]
+      || state.accounts[0]
+      || null;
+}
+
+function getAccountIcon(type) {
+  return ACCOUNT_TYPE_MAP[type]?.emoji || '💼';
+}
+
+function getAccountTypeName(type) {
+  return ACCOUNT_TYPE_MAP[type]?.name || type;
+}
+
+function ensureSingleDefault(newDefaultId) {
+  state.accounts.forEach(a => {
+    a.isDefault = (a.id === newDefaultId);
+  });
+}
+
+function countEntriesUsingAccount(accId) {
+  let n = 0;
+  for (const book of state.books) {
+    for (const e of (state.entries[book] || [])) {
+      if (e.account === accId || e.fromAccount === accId || e.toAccount === accId) n++;
+    }
+  }
+  return n;
+}
+
+// 簡化預設帳戶：若仍是 v1.1 初版的「主活存 + 現金」配置且都未被使用者改過，
+// 把所有引用 acc_main 的紀錄與排程改指向 acc_cash，並移除 acc_main。
+function maybeSimplifyDefaultAccounts() {
+  const main = state.accounts.find(a => a.id === 'acc_main');
+  const cash = state.accounts.find(a => a.id === 'acc_cash');
+  if (!main || !cash) return;
+  // 只有「都還是預設外觀」才合併，使用者改過名/銀行/用途就不動
+  const mainIsDefault = main.name === '主活存' && !main.bank && !main.purpose;
+  const cashIsDefault = cash.name === '現金';
+  if (!mainIsDefault || !cashIsDefault) return;
+
+  for (const book of state.books) {
+    state.entries[book] = (state.entries[book] || []).map(e => {
+      const out = { ...e };
+      if (out.account === 'acc_main') out.account = 'acc_cash';
+      if (out.fromAccount === 'acc_main') out.fromAccount = 'acc_cash';
+      if (out.toAccount === 'acc_main') out.toAccount = 'acc_cash';
+      return out;
+    });
+  }
+  state.schedules = (state.schedules || []).map(s => {
+    const out = { ...s };
+    if (out.account === 'acc_main') out.account = 'acc_cash';
+    if (out.fromAccount === 'acc_main') out.fromAccount = 'acc_cash';
+    if (out.toAccount === 'acc_main') out.toAccount = 'acc_cash';
+    return out;
+  });
+  state.accounts = state.accounts.filter(a => a.id !== 'acc_main');
+  cash.isDefault = true;
+}
+
+/* ===================================================
+ * 排程 helpers
+ * =================================================== */
+// 將某月某日對應到該月實際存在的日（31 在 2 月 → 該月最後一天）
+function clampDayToMonth(y, m0, day) {
+  const lastDay = new Date(y, m0 + 1, 0).getDate();
+  return Math.min(day, lastDay);
+}
+
+// 初始 nextDue：從 fromISO（預設今天）起，找下個（含當天）符合 dayOfMonth 的日期
+function computeInitialNextDue(dayOfMonth, fromISO) {
+  const fromIso = fromISO || todayISO();
+  const from = new Date(fromIso + 'T00:00:00');
+  let y = from.getFullYear();
+  let m0 = from.getMonth();
+  let day = clampDayToMonth(y, m0, dayOfMonth);
+  let cand = new Date(y, m0, day);
+  if (cand < from) {
+    m0++;
+    if (m0 > 11) { y++; m0 -= 12; }
+    day = clampDayToMonth(y, m0, dayOfMonth);
+  }
+  return `${y}-${String(m0+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+// 執行排程後推進 nextDue 到下個月對應日
+function advanceNextDue(currentNextDue, dayOfMonth) {
+  const d = new Date((currentNextDue || todayISO()) + 'T00:00:00');
+  let y = d.getFullYear();
+  let m0 = d.getMonth() + 1;
+  if (m0 > 11) { y++; m0 -= 12; }
+  const day = clampDayToMonth(y, m0, dayOfMonth);
+  return `${y}-${String(m0+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+// 檢查所有到期排程；若有則彈出第一個 modal
+function checkScheduleDue() {
+  if (document.querySelector('.modal-backdrop')) {
+    // 有別的 modal 開著就先等
+    state.ui.scheduleCheckScheduled = true;
+    return;
+  }
+  state.ui.scheduleCheckScheduled = false;
+  const today = todayISO();
+  const due = state.schedules.find(s => s.active && s.nextDue && s.nextDue <= today);
+  if (due) {
+    openScheduleDueModal(due);
+  }
+}
+
+/* ===================================================
+ * Toast
+ * =================================================== */
+function toast(message) {
+  const root = document.getElementById('toast-root');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = message;
+  root.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 250);
+  }, 1800);
+}
+
+/* ===================================================
+ * Modal helper
+ * =================================================== */
+function openModal(contentHTML, opts = {}) {
+  closeModal();
+  const root = document.getElementById('modal-root');
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop' + (opts.top ? ' top' : '');
+  backdrop.innerHTML = `<div class="modal" role="dialog">${contentHTML}</div>`;
+  root.appendChild(backdrop);
+  if (!opts.lockBackdrop) {
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closeModal();
+    });
+  }
+  return backdrop.querySelector('.modal');
+}
+
+function closeModal() {
+  document.getElementById('modal-root').innerHTML = '';
+  // 若關閉一個 modal 後，還有等待中的排程檢查，補執行
+  if (state.ui.scheduleCheckScheduled) {
+    setTimeout(checkScheduleDue, 50);
+  }
+}
+
+/* ===================================================
+ * Header
+ * =================================================== */
+function renderHeader() {
+  const header = document.getElementById('header');
+  const ym = state.ui.viewMonth;
+  const badge = computeSyncBadge();
+  header.innerHTML = `
+    <div style="display:flex;align-items:center;min-width:0;flex:1">
+      <button class="book-pill" id="btn-book">
+        <span>${escapeHTML(state.currentBook)}</span>
+        <span class="caret">▼</span>
+      </button>
+      <button class="sync-badge ${badge.cls}" id="btn-sync-badge" title="${escapeHTML(badge.title)}" aria-label="${escapeHTML(badge.title)}">${badge.icon}</button>
+    </div>
+    <div class="month-switch">
+      <button id="btn-prev-month" aria-label="上個月">◀</button>
+      <span class="month-label">${ym.replace('-', ' / ')}</span>
+      <button id="btn-next-month" aria-label="下個月">▶</button>
+    </div>
+  `;
+  header.querySelector('#btn-book').addEventListener('click', openBookSelector);
+  header.querySelector('#btn-sync-badge').addEventListener('click', () => {
+    state.ui.tab = 'settings';
+    renderTabbar();
+    renderMain();
+    // 滾到雲端同步區
+    setTimeout(() => {
+      const el = document.getElementById('sync-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
+  });
+  header.querySelector('#btn-prev-month').addEventListener('click', () => {
+    state.ui.viewMonth = shiftMonth(state.ui.viewMonth, -1);
+    renderHeader();
+    renderMain();
+    checkScheduleDue();
+  });
+  header.querySelector('#btn-next-month').addEventListener('click', () => {
+    state.ui.viewMonth = shiftMonth(state.ui.viewMonth, 1);
+    renderHeader();
+    renderMain();
+    checkScheduleDue();
+  });
+}
+
+function computeSyncBadge() {
+  if (!syncEnabled()) {
+    return { cls: 'off', icon: '', title: '雲端同步未啟用' };
+  }
+  if (!navigator.onLine) {
+    return { cls: 'offline', icon: '⊘', title: '離線中' };
+  }
+  if (state.sync._flushing) {
+    return { cls: 'syncing', icon: '⟳', title: '同步中…' };
+  }
+  if (state.sync.pendingQueue.length > 0) {
+    return { cls: 'pending', icon: '⚠', title: `待同步 ${state.sync.pendingQueue.length} 筆` };
+  }
+  if (state.sync.lastError) {
+    return { cls: 'error', icon: '✕', title: '上次同步失敗：' + state.sync.lastError };
+  }
+  return { cls: 'ok', icon: '✓', title: '已同步' };
+}
+
+function updateSyncBadge() {
+  const btn = document.getElementById('btn-sync-badge');
+  if (!btn) return;
+  const b = computeSyncBadge();
+  btn.className = 'sync-badge ' + b.cls;
+  btn.title = b.title;
+  btn.setAttribute('aria-label', b.title);
+  btn.textContent = b.icon;
+  // 設定頁狀態列也跟著更新
+  const stat = document.getElementById('sync-status-line');
+  if (stat) stat.innerHTML = syncStatusLineHTML();
+}
+
+function syncStatusLineHTML() {
+  const b = computeSyncBadge();
+  let icon, color, text;
+  if (!syncEnabled()) {
+    icon = '🔘'; color = 'var(--ink-faint)'; text = '尚未設定（填入下方 URL 與 Secret）';
+  } else if (!navigator.onLine) {
+    icon = '⊘'; color = 'var(--ink-faint)'; text = '目前離線，恢復連線後自動補送';
+  } else if (state.sync._flushing) {
+    icon = '⟳'; color = 'var(--accent)'; text = '同步中…';
+  } else if (state.sync.pendingQueue.length > 0) {
+    icon = '⚠'; color = '#856404'; text = `待同步 ${state.sync.pendingQueue.length} 筆`;
+  } else if (state.sync.lastError) {
+    icon = '✕'; color = 'var(--expense)'; text = '上次失敗：' + escapeHTML(state.sync.lastError);
+  } else if (state.sync.lastSyncedAt) {
+    icon = '✓'; color = 'var(--income)';
+    const diff = Math.round((Date.now() - state.sync.lastSyncedAt) / 60000);
+    text = `已連線 · 上次同步：${diff <= 0 ? '剛剛' : diff + ' 分鐘前'}`;
+  } else {
+    icon = '✓'; color = 'var(--income)'; text = '已連線';
+  }
+  return `<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:${color}">
+    <span style="font-size:16px">${icon}</span>
+    <span>${text}</span>
+  </div>`;
+}
+
+/* ===================================================
+ * Tabbar
+ * =================================================== */
+function renderTabbar() {
+  const tabs = [
+    { id: 'record',   icon: '＋', label: '記帳' },
+    { id: 'list',     icon: '☰', label: '明細' },
+    { id: 'stats',    icon: '◔', label: '統計' },
+    { id: 'settings', icon: '⚙', label: '設定' }
+  ];
+  const tb = document.getElementById('tabbar');
+  tb.innerHTML = tabs.map(t => `
+    <button data-tab="${t.id}" class="${state.ui.tab === t.id ? 'active' : ''}">
+      <span class="icon">${t.icon}</span>
+      <span>${t.label}</span>
+    </button>
+  `).join('');
+  tb.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.tab;
+      if (state.ui.tab === id) return;
+      state.ui.tab = id;
+      renderTabbar();
+      renderMain();
+      if (id === 'record') checkScheduleDue();
+    });
+  });
+}
+
+/* ===================================================
+ * Main router
+ * =================================================== */
+function renderMain() {
+  const main = document.getElementById('main');
+  switch (state.ui.tab) {
+    case 'record':   main.innerHTML = renderRecordHTML();   bindRecordEvents();   break;
+    case 'list':     main.innerHTML = renderListHTML();     bindListEvents();     break;
+    case 'stats':    main.innerHTML = renderStatsHTML();    bindStatsEvents();    break;
+    case 'settings': main.innerHTML = renderSettingsHTML(); bindSettingsEvents(); break;
+  }
+  window.scrollTo(0, 0);
+}
+
+/* ===================================================
+ * Record view
+ * =================================================== */
+function renderRecordHTML() {
+  const d = state.ui.draft;
+
+  // 確保 draft 帳戶有效（若帳戶被封存或不存在，回退預設）
+  ensureDraftAccountsValid(d);
+
+  const type = d.type;
+  const amountActiveCls = (type === 'expense') ? 'expense' : (type === 'income') ? 'income' : 'transfer';
+  const sign = (type === 'expense') ? '-' : (type === 'income') ? '+' : '';
+  const amountText = d.amount > 0 ? `${sign}$${formatMoney(d.amount)}` : '$0';
+
+  // canSave 判斷
+  let canSave = false;
+  if (d.amount > 0) {
+    if (type === 'expense' || type === 'income') {
+      canSave = !!d.category && !!d.account;
+    } else if (type === 'transfer') {
+      canSave = !!d.fromAccount && !!d.toAccount && d.fromAccount !== d.toAccount;
+    }
+  }
+
+  const typeSwitchHTML = `
+    <div class="type-switch">
+      <button class="${type === 'expense'  ? 'active expense'  : ''}" data-type="expense">支出</button>
+      <button class="${type === 'income'   ? 'active income'   : ''}" data-type="income">收入</button>
+      <button class="${type === 'transfer' ? 'active transfer' : ''}" data-type="transfer">轉帳</button>
+    </div>
+  `;
+
+  const amountHTML = `
+    <div class="card" style="padding:8px 16px">
+      <div class="amount-display ${d.amount > 0 ? amountActiveCls : ''}">${amountText}</div>
+    </div>
+  `;
+
+  let middleHTML = '';
+  if (type === 'transfer') {
+    middleHTML = renderTransferMiddleHTML(d);
+  } else {
+    middleHTML = renderExpenseIncomeMiddleHTML(d, type);
+  }
+
+  const noteHTML = `
+    <div class="card">
+      <input class="note-input" id="note-input" type="text"
+             placeholder="備註(可選)" maxlength="${MAX_NOTE_LEN}"
+             value="${escapeHTML(d.note)}">
+    </div>
+  `;
+
+  const dateHTML = `
+    <div class="card">
+      <div class="date-row">
+        <label>日期</label>
+        <input type="date" id="date-input" value="${d.date}">
+      </div>
+    </div>
+  `;
+
+  // 快速建立定期扣款（必須先填好金額與必要欄位才會啟用）
+  const recurringHTML = `
+    <div class="card" style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div style="font-size:13px;color:var(--ink-soft);line-height:1.4">
+        💡 想每月自動建立這筆？<br>
+        <span style="color:var(--ink-faint);font-size:11px">設定後到了該日，PWA 會自動彈出確認</span>
+      </div>
+      <button class="btn ${d.type === 'transfer' ? 'btn-transfer' : 'btn-primary'}" id="btn-make-recurring" ${canSave ? '' : 'disabled'}>設為每月定期</button>
+    </div>
+  `;
+
+  const keypadHTML = `
+    <div class="keypad" id="keypad">
+      <button data-k="7">7</button>
+      <button data-k="8">8</button>
+      <button data-k="9">9</button>
+      <button class="key-save" data-k="save" ${canSave ? '' : 'disabled'}>儲存</button>
+      <button data-k="4">4</button>
+      <button data-k="5">5</button>
+      <button data-k="6">6</button>
+      <button data-k="1">1</button>
+      <button data-k="2">2</button>
+      <button data-k="3">3</button>
+      <button class="key-back" data-k="back">⌫</button>
+      <button class="key-fn" data-k="clear">C</button>
+      <button data-k="0">0</button>
+      <button data-k="00">00</button>
+    </div>
+  `;
+
+  return typeSwitchHTML + amountHTML + middleHTML + noteHTML + dateHTML + recurringHTML + keypadHTML;
+}
+
+function ensureDraftAccountsValid(d) {
+  const def = getDefaultAccount();
+  const defId = def ? def.id : null;
+  if (d.type === 'transfer') {
+    if (d.fromAccount && !findAccount(d.fromAccount)) d.fromAccount = null;
+    if (d.toAccount && !findAccount(d.toAccount)) d.toAccount = null;
+    if (!d.fromAccount && defId) d.fromAccount = defId;
+    // toAccount 不自動填，避免一開始就 from===to；交由使用者選
+    if (d.fromAccount && d.toAccount === d.fromAccount) d.toAccount = null;
+  } else {
+    if (d.account && !findAccount(d.account)) d.account = null;
+    if (!d.account && defId) d.account = defId;
+  }
+}
+
+function renderExpenseIncomeMiddleHTML(d, type) {
+  const list = CATS[type];
+  const catsHTML = list.map(c => `
+    <button class="cat-btn ${d.category === c.id ? 'selected' : ''}" data-cat="${c.id}">
+      <span class="emoji">${c.emoji}</span>
+      <span class="name">${escapeHTML(c.name)}</span>
+    </button>
+  `).join('');
+
+  let subsHTML = '';
+  const cat = findCat(type, d.category);
+  const subs = d.category ? getSubcategories(type, d.category) : [];
+  if (cat && subs.length) {
+    subsHTML = `
+      <div class="card">
+        <h3>細項標籤</h3>
+        <div class="sub-row">
+          ${subs.map(s => `
+            <button class="sub-pill ${d.subcategory === s ? 'selected' : ''}" data-sub="${escapeHTML(s)}">${escapeHTML(s)}</button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // 帳戶 chip 列
+  const active = getActiveAccounts();
+  const accChipsHTML = active.map(a => `
+    <button class="acc-chip ${d.account === a.id ? 'selected' : ''}" data-acc="${a.id}">
+      <span>${getAccountIcon(a.type)}</span>
+      <span>${escapeHTML(a.name)}</span>
+    </button>
+  `).join('') + `<button class="acc-chip add" data-acc-add="account">＋ 新增</button>`;
+
+  const accHTML = `
+    <div class="card">
+      <h3>帳戶</h3>
+      <div class="acc-row">${accChipsHTML}</div>
+    </div>
+  `;
+
+  const catsCardHTML = `
+    <div class="card">
+      <h3>分類</h3>
+      <div class="cat-grid">${catsHTML}</div>
+    </div>
+  `;
+
+  return catsCardHTML + subsHTML + accHTML;
+}
+
+function renderTransferMiddleHTML(d) {
+  const active = getActiveAccounts();
+  const fromChips = active.map(a => `
+    <button class="acc-chip ${d.fromAccount === a.id ? 'transfer-selected' : ''}" data-from="${a.id}">
+      <span>${getAccountIcon(a.type)}</span>
+      <span>${escapeHTML(a.name)}</span>
+    </button>
+  `).join('') + `<button class="acc-chip add" data-acc-add="from">＋ 新增</button>`;
+
+  const toChips = active.map(a => {
+    const disabled = (a.id === d.fromAccount);
+    return `<button class="acc-chip ${d.toAccount === a.id ? 'transfer-selected' : ''}" data-to="${a.id}" ${disabled ? 'disabled' : ''}>
+      <span>${getAccountIcon(a.type)}</span>
+      <span>${escapeHTML(a.name)}</span>
+    </button>`;
+  }).join('') + `<button class="acc-chip add" data-acc-add="to">＋ 新增</button>`;
+
+  const purposeChips = TRANSFER_PURPOSES.map(p => `
+    <button class="sub-pill ${d.transferPurpose === p ? 'selected' : ''}" data-purpose="${escapeHTML(p)}">${escapeHTML(p)}</button>
+  `).join('');
+
+  let hint = '';
+  if (active.length < 2) {
+    hint = `<div class="transfer-hint">需要至少 2 個有效帳戶才能轉帳，請至「設定 → 管理帳戶」新增。</div>`;
+  } else if (d.fromAccount && d.toAccount && d.fromAccount === d.toAccount) {
+    hint = `<div class="transfer-hint">從與到帳戶不可相同</div>`;
+  }
+
+  return `
+    <div class="card">
+      <h3>從帳戶</h3>
+      <div class="acc-row">${fromChips}</div>
+    </div>
+    <div class="card">
+      <h3>到帳戶</h3>
+      <div class="acc-row">${toChips}</div>
+      ${hint}
+    </div>
+    <div class="card">
+      <h3>目的（可選）</h3>
+      <div class="sub-row">${purposeChips}</div>
+    </div>
+  `;
+}
+
+function bindRecordEvents() {
+  const d = state.ui.draft;
+
+  // 收支/轉帳切換
+  document.querySelectorAll('.type-switch button[data-type]').forEach(b => {
+    b.addEventListener('click', () => {
+      const t = b.dataset.type;
+      if (d.type === t) return;
+      switchDraftType(d, t);
+      renderMain();
+    });
+  });
+
+  // 大分類
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      const id = b.dataset.cat;
+      if (d.category === id) {
+        d.category = null;
+        d.subcategory = null;
+      } else {
+        d.category = id;
+        d.subcategory = null;
+      }
+      renderMain();
+    });
+  });
+
+  // 細項
+  document.querySelectorAll('.sub-pill[data-sub]').forEach(b => {
+    b.addEventListener('click', () => {
+      const s = b.dataset.sub;
+      d.subcategory = (d.subcategory === s) ? null : s;
+      renderMain();
+    });
+  });
+
+  // 帳戶 chip（expense/income）
+  document.querySelectorAll('.acc-chip[data-acc]').forEach(b => {
+    b.addEventListener('click', () => {
+      d.account = b.dataset.acc;
+      renderMain();
+    });
+  });
+
+  // 從帳戶（transfer）
+  document.querySelectorAll('.acc-chip[data-from]').forEach(b => {
+    b.addEventListener('click', () => {
+      const id = b.dataset.from;
+      d.fromAccount = id;
+      if (d.toAccount === id) d.toAccount = null;
+      renderMain();
+    });
+  });
+
+  // 到帳戶（transfer）
+  document.querySelectorAll('.acc-chip[data-to]').forEach(b => {
+    if (b.disabled) return;
+    b.addEventListener('click', () => {
+      d.toAccount = b.dataset.to;
+      renderMain();
+    });
+  });
+
+  // 目的標籤
+  document.querySelectorAll('.sub-pill[data-purpose]').forEach(b => {
+    b.addEventListener('click', () => {
+      const p = b.dataset.purpose;
+      d.transferPurpose = (d.transferPurpose === p) ? null : p;
+      renderMain();
+    });
+  });
+
+  // 「＋ 新增」帳戶 — 從哪一行按的，新建好就自動填到那行
+  document.querySelectorAll('[data-acc-add]').forEach(b => {
+    b.addEventListener('click', () => {
+      const target = b.dataset.accAdd; // 'from' | 'to' | 'account'
+      openAccountEditor(null, (newAccId) => {
+        if (newAccId) {
+          if (target === 'from') {
+            d.fromAccount = newAccId;
+            if (d.toAccount === newAccId) d.toAccount = null;
+          } else if (target === 'to') {
+            d.toAccount = newAccId;
+            if (d.fromAccount === newAccId) d.fromAccount = null;
+          } else if (target === 'account') {
+            d.account = newAccId;
+          }
+        }
+        renderMain();
+      });
+    });
+  });
+
+  // 備註
+  const noteEl = document.getElementById('note-input');
+  if (noteEl) {
+    noteEl.addEventListener('input', () => {
+      d.note = noteEl.value.slice(0, MAX_NOTE_LEN);
+    });
+  }
+
+  // 日期
+  const dateEl = document.getElementById('date-input');
+  if (dateEl) {
+    dateEl.addEventListener('change', () => {
+      if (dateEl.value) d.date = dateEl.value;
+    });
+  }
+
+  // 快速建立定期扣款
+  const recurBtn = document.getElementById('btn-make-recurring');
+  if (recurBtn) {
+    recurBtn.addEventListener('click', () => {
+      if (recurBtn.disabled) return;
+      openScheduleFromDraft();
+    });
+  }
+
+  // 鍵盤
+  document.querySelectorAll('#keypad button').forEach(b => {
+    b.addEventListener('click', () => handleKeypad(b.dataset.k));
+  });
+}
+
+// 由當前記帳頁 draft 開啟「新增定期扣款」編輯器，預填欄位
+function openScheduleFromDraft() {
+  const d = state.ui.draft;
+  const todayDay = new Date().getDate();
+  const dayOfMonth = (() => {
+    const dt = new Date((d.date || todayISO()) + 'T00:00:00');
+    const day = dt.getDate();
+    return Number.isFinite(day) && day >= 1 && day <= 31 ? day : todayDay;
+  })();
+
+  const template = {
+    type: d.type,
+    amount: d.amount || 0,
+    dayOfMonth,
+    book: state.currentBook,
+    note: d.note || '',
+    active: true
+  };
+  if (d.type === 'transfer') {
+    template.fromAccount = d.fromAccount || null;
+    template.toAccount = d.toAccount || null;
+    template.transferPurpose = d.transferPurpose || null;
+  } else {
+    template.account = d.account || null;
+    template.category = d.category || null;
+    template.subcategory = d.subcategory || null;
+  }
+  openScheduleEditor(null, () => { renderMain(); }, template);
+}
+
+// 收支類型切換 draft 的欄位處理
+function switchDraftType(d, newType) {
+  const prevType = d.type;
+  d.type = newType;
+  if (newType === 'transfer') {
+    // 進入轉帳：保留金額、備註、日期；清分類；fromAccount 取原 account
+    const def = getDefaultAccount();
+    d.fromAccount = d.account || (def ? def.id : null);
+    d.toAccount = null;
+    d.transferPurpose = null;
+    d.category = null;
+    d.subcategory = null;
+  } else if (prevType === 'transfer') {
+    // 從轉帳離開：account 取 fromAccount
+    d.account = d.fromAccount || (getDefaultAccount()?.id || null);
+    d.fromAccount = null;
+    d.toAccount = null;
+    d.transferPurpose = null;
+    d.category = null;
+    d.subcategory = null;
+  } else {
+    // expense ↔ income：清分類
+    d.category = null;
+    d.subcategory = null;
+  }
+}
+
+function handleKeypad(k) {
+  const d = state.ui.draft;
+  if (k === 'save') {
+    saveEntry();
+    return;
+  }
+  if (k === 'clear') {
+    d.amount = 0;
+  } else if (k === 'back') {
+    d.amount = Math.floor(d.amount / 10);
+  } else if (k === '00') {
+    const next = d.amount * 100;
+    if (String(next).length <= MAX_AMOUNT_DIGITS) d.amount = next;
+  } else {
+    const digit = parseInt(k, 10);
+    if (Number.isNaN(digit)) return;
+    const next = d.amount * 10 + digit;
+    if (String(next).length <= MAX_AMOUNT_DIGITS) d.amount = next;
+  }
+  renderMain();
+}
+
+function saveEntry() {
+  const d = state.ui.draft;
+  if (!(d.amount > 0)) return;
+
+  let entry;
+  if (d.type === 'transfer') {
+    if (!d.fromAccount || !d.toAccount || d.fromAccount === d.toAccount) return;
+    entry = {
+      id: genId(),
+      type: 'transfer',
+      amount: d.amount,
+      fromAccount: d.fromAccount,
+      toAccount: d.toAccount,
+      transferPurpose: d.transferPurpose || null,
+      note: (d.note || '').slice(0, MAX_NOTE_LEN),
+      date: d.date,
+      createdAt: Date.now()
+    };
+  } else {
+    if (!d.category || !d.account) return;
+    entry = {
+      id: genId(),
+      type: d.type,
+      amount: d.amount,
+      category: d.category,
+      subcategory: d.subcategory,
+      account: d.account,
+      note: (d.note || '').slice(0, MAX_NOTE_LEN),
+      date: d.date,
+      createdAt: Date.now()
+    };
+  }
+
+  state.entries[state.currentBook].push(entry);
+  saveState();
+  syncDispatch('append', toCloudPayload(entry, state.currentBook));
+
+  if (d.type === 'transfer') {
+    toast(`已轉帳 $${formatMoney(d.amount)}`);
+  } else {
+    const sign = d.type === 'expense' ? '−' : '+';
+    toast(`已記錄 ${sign}$${formatMoney(d.amount)}`);
+  }
+
+  // 重置金額、備註；保留類型、分類、帳戶
+  d.amount = 0;
+  d.note = '';
+  d.subcategory = null;
+  d.transferPurpose = null;
+  renderMain();
+}
+
+/* ===================================================
+ * List view
+ * =================================================== */
+function renderListHTML() {
+  const ym = state.ui.viewMonth;
+  const entries = getMonthEntries(state.currentBook, ym);
+
+  let income = 0, expense = 0, transfer = 0;
+  entries.forEach(e => {
+    if (e.type === 'income') income += e.amount;
+    else if (e.type === 'expense') expense += e.amount;
+    else if (e.type === 'transfer') transfer += e.amount;
+  });
+  const net = income - expense;
+
+  const summaryHTML = `
+    <div class="summary-row">
+      <div class="summary-cell income">
+        <div class="label">收入</div>
+        <div class="value">+${formatMoney(income)}</div>
+      </div>
+      <div class="summary-cell expense">
+        <div class="label">支出</div>
+        <div class="value">−${formatMoney(expense)}</div>
+      </div>
+      <div class="summary-cell net">
+        <div class="label">淨額</div>
+        <div class="value">${net >= 0 ? '+' : '−'}${formatMoney(net)}</div>
+      </div>
+    </div>
+    ${transfer > 0 ? `<div class="transfer-note">↔️ 本月轉帳 NT$ ${formatMoney(transfer)}（不計入收支）</div>` : ''}
+  `;
+
+  if (entries.length === 0) {
+    return summaryHTML + `
+      <div class="empty-state">
+        <div class="icon">📓</div>
+        <div>本月還沒有紀錄，從「記帳」分頁開始吧</div>
+      </div>
+    `;
+  }
+
+  // 依日期分組
+  const groups = {};
+  entries.forEach(e => {
+    if (!groups[e.date]) groups[e.date] = [];
+    groups[e.date].push(e);
+  });
+  const sortedDates = Object.keys(groups).sort().reverse();
+
+  const groupsHTML = sortedDates.map(date => {
+    const list = groups[date].slice().sort((a, b) => b.createdAt - a.createdAt);
+    let dayExpense = 0, dayIncome = 0, dayTransfer = 0;
+    list.forEach(e => {
+      if (e.type === 'expense') dayExpense += e.amount;
+      else if (e.type === 'income') dayIncome += e.amount;
+      else if (e.type === 'transfer') dayTransfer += e.amount;
+    });
+    const { m, d, weekday } = isoToParts(date);
+    const parts = [];
+    if (dayExpense > 0) parts.push(`支出 ${formatMoney(dayExpense)}`);
+    if (dayIncome > 0) parts.push(`收入 ${formatMoney(dayIncome)}`);
+    if (dayTransfer > 0) parts.push(`轉帳 ${formatMoney(dayTransfer)}`);
+    const totalText = parts.join(' · ');
+
+    const itemsHTML = list.map(e => renderEntryItemHTML(e)).join('');
+
+    return `
+      <div class="day-group">
+        <div class="day-header">
+          <span><span class="date">${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}</span> 週${weekday}</span>
+          <span class="total">${totalText}</span>
+        </div>
+        <div class="entry-list">${itemsHTML}</div>
+      </div>
+    `;
+  }).join('');
+
+  return summaryHTML + groupsHTML;
+}
+
+function renderEntryItemHTML(e) {
+  if (e.type === 'transfer') {
+    const from = findAccount(e.fromAccount);
+    const to = findAccount(e.toAccount);
+    const fromName = from ? from.name : (e.fromAccount || '?');
+    const toName = to ? to.name : (e.toAccount || '?');
+    const purpose = e.transferPurpose ? `${escapeHTML(e.transferPurpose)}` : '';
+    const noteText = e.note || '';
+    const meta = [purpose, escapeHTML(noteText)].filter(Boolean).join(' · ');
+    const schedTag = e.scheduleId ? '<span class="entry-tag">排程</span>' : '';
+    return `
+      <div class="entry-item transfer" data-id="${e.id}">
+        <div class="entry-emoji">↔️</div>
+        <div class="entry-body">
+          <div class="entry-title">${escapeHTML(fromName)} → ${escapeHTML(toName)}${schedTag}</div>
+          ${meta ? `<div class="entry-note">${meta}</div>` : ''}
+        </div>
+        <div class="entry-amount transfer">${formatMoney(e.amount)}</div>
+      </div>
+    `;
+  }
+  const cat = findCat(e.type, e.category);
+  const emoji = cat?.emoji || '•';
+  const catName = cat?.name || '未知';
+  const subText = e.subcategory ? ` · ${escapeHTML(e.subcategory)}` : '';
+  const acc = findAccount(e.account);
+  const accText = acc ? `<span class="entry-tag">${getAccountIcon(acc.type)} ${escapeHTML(acc.name)}</span>` : '';
+  const schedTag = e.scheduleId ? '<span class="entry-tag">排程</span>' : '';
+  const sign = e.type === 'expense' ? '−' : '+';
+  const cls = e.type === 'expense' ? 'expense' : 'income';
+  const noteHTML = (e.note || '') ? `<div class="entry-note">${escapeHTML(e.note)}</div>` : '';
+  return `
+    <div class="entry-item" data-id="${e.id}">
+      <div class="entry-emoji">${emoji}</div>
+      <div class="entry-body">
+        <div class="entry-title">${escapeHTML(catName)}${subText}${accText}${schedTag}</div>
+        ${noteHTML}
+      </div>
+      <div class="entry-amount ${cls}">${sign}${formatMoney(e.amount)}</div>
+    </div>
+  `;
+}
+
+function bindListEvents() {
+  document.querySelectorAll('.entry-item').forEach(el => {
+    el.addEventListener('click', () => openEntryEditor(el.dataset.id));
+  });
+}
+
+/* ===================================================
+ * 編輯 entry modal
+ * =================================================== */
+function findEntry(id) {
+  for (const book of state.books) {
+    const idx = state.entries[book]?.findIndex(e => e.id === id);
+    if (idx >= 0) return { book, idx, entry: state.entries[book][idx] };
+  }
+  return null;
+}
+
+function openEntryEditor(id, workingOverride) {
+  const found = findEntry(id);
+  if (!found) return;
+  const original = found.entry;
+  // working copy：所有修改只在 working 上累積，按「儲存」才寫回 original
+  const working = workingOverride || { ...original };
+
+  const type = working.type;
+  const active = getActiveAccounts();
+
+  const typeBtns = `
+    <div class="type-switch" style="margin:0">
+      <button class="${type === 'expense' ? 'active expense' : ''}" data-edit-type="expense">支出</button>
+      <button class="${type === 'income' ? 'active income' : ''}" data-edit-type="income">收入</button>
+      <button class="${type === 'transfer' ? 'active transfer' : ''}" data-edit-type="transfer">轉帳</button>
+    </div>
+  `;
+
+  let bodyHTML = '';
+  if (type === 'transfer') {
+    const fromOptions = active.map(a => `<option value="${a.id}" ${a.id === working.fromAccount ? 'selected' : ''}>${getAccountIcon(a.type)} ${escapeHTML(a.name)}</option>`).join('');
+    const toOptions = active.map(a => `<option value="${a.id}" ${a.id === working.toAccount ? 'selected' : ''}>${getAccountIcon(a.type)} ${escapeHTML(a.name)}</option>`).join('');
+    const purposeOptions = `<option value="">（無）</option>` + TRANSFER_PURPOSES.map(p =>
+      `<option value="${escapeHTML(p)}" ${p === working.transferPurpose ? 'selected' : ''}>${escapeHTML(p)}</option>`
+    ).join('');
+    bodyHTML = `
+      <div class="form-field">
+        <label>從帳戶</label>
+        <select id="edit-from">${fromOptions}</select>
+      </div>
+      <div class="form-field">
+        <label>到帳戶</label>
+        <select id="edit-to">${toOptions}</select>
+      </div>
+      <div class="form-field">
+        <label>目的</label>
+        <select id="edit-purpose">${purposeOptions}</select>
+      </div>
+    `;
+  } else {
+    const cats = CATS[type];
+    const subs = getSubcategories(type, working.category);
+    const catOptions = cats.map(c => `<option value="${c.id}" ${c.id === working.category ? 'selected' : ''}>${c.emoji} ${escapeHTML(c.name)}</option>`).join('');
+    const subOptions = subs.length
+      ? `<option value="">（無）</option>` + subs.map(s => `<option value="${escapeHTML(s)}" ${s === working.subcategory ? 'selected' : ''}>${escapeHTML(s)}</option>`).join('')
+      : '';
+    const accOptions = active.map(a => `<option value="${a.id}" ${a.id === working.account ? 'selected' : ''}>${getAccountIcon(a.type)} ${escapeHTML(a.name)}</option>`).join('');
+    bodyHTML = `
+      <div class="form-field">
+        <label>分類</label>
+        <select id="edit-cat">${catOptions}</select>
+      </div>
+      <div class="form-field" id="edit-sub-wrap" ${subs.length ? '' : 'style="display:none"'}>
+        <label>細項</label>
+        <select id="edit-sub">${subOptions}</select>
+      </div>
+      <div class="form-field">
+        <label>帳戶</label>
+        <select id="edit-account">${accOptions}</select>
+      </div>
+    `;
+  }
+
+  const html = `
+    <div class="modal-title">編輯紀錄</div>
+    <div class="form-field">
+      <label>類型</label>
+      ${typeBtns}
+    </div>
+    <div class="form-field">
+      <label>金額</label>
+      <input id="edit-amount" type="number" inputmode="numeric" value="${working.amount}" min="1" max="9999999">
+    </div>
+    ${bodyHTML}
+    <div class="form-field">
+      <label>備註</label>
+      <input id="edit-note" type="text" maxlength="${MAX_NOTE_LEN}" value="${escapeHTML(working.note || '')}">
+    </div>
+    <div class="form-field">
+      <label>日期</label>
+      <input id="edit-date" type="date" value="${working.date}">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="edit-delete">刪除</button>
+      <button class="btn" id="edit-cancel">取消</button>
+      <button class="btn btn-primary" id="edit-save">儲存</button>
+    </div>
+  `;
+  const modal = openModal(html);
+
+  function collectFromForm() {
+    const baseAmount = parseInt(modal.querySelector('#edit-amount').value, 10) || 0;
+    const note = modal.querySelector('#edit-note').value;
+    const date = modal.querySelector('#edit-date').value || working.date;
+    if (type === 'transfer') {
+      return {
+        amount: baseAmount,
+        note, date,
+        fromAccount: modal.querySelector('#edit-from').value,
+        toAccount: modal.querySelector('#edit-to').value,
+        transferPurpose: modal.querySelector('#edit-purpose').value || null
+      };
+    }
+    return {
+      amount: baseAmount,
+      note, date,
+      category: modal.querySelector('#edit-cat').value || working.category,
+      subcategory: (modal.querySelector('#edit-sub') && modal.querySelector('#edit-sub').value) || null,
+      account: modal.querySelector('#edit-account').value || working.account
+    };
+  }
+
+  // 切換類型：依當前狀態組新 working、重開 modal
+  modal.querySelectorAll('[data-edit-type]').forEach(b => {
+    b.addEventListener('click', () => {
+      const t = b.dataset.editType;
+      if (t === working.type) return;
+      const cur = collectFromForm();
+      const newWorking = { ...working, ...cur, type: t };
+      if (t === 'transfer') {
+        // 支出/收入 → 轉帳
+        const def = getDefaultAccount();
+        newWorking.fromAccount = working.account || (def ? def.id : null);
+        newWorking.toAccount = null;
+        newWorking.transferPurpose = null;
+        delete newWorking.category;
+        delete newWorking.subcategory;
+        delete newWorking.account;
+      } else if (working.type === 'transfer') {
+        // 轉帳 → 支出/收入
+        newWorking.account = working.fromAccount || (getDefaultAccount()?.id || null);
+        newWorking.category = CATS[t][0].id;
+        newWorking.subcategory = null;
+        delete newWorking.fromAccount;
+        delete newWorking.toAccount;
+        delete newWorking.transferPurpose;
+      } else {
+        // 支出 ↔ 收入
+        newWorking.category = CATS[t][0].id;
+        newWorking.subcategory = null;
+      }
+      openEntryEditor(id, newWorking);
+    });
+  });
+
+  // 切換分類 → 重填細項
+  const catEl = modal.querySelector('#edit-cat');
+  if (catEl) {
+    catEl.addEventListener('change', (ev) => {
+      const newCatId = ev.target.value;
+      const newSubs = getSubcategories(working.type, newCatId);
+      const wrap = modal.querySelector('#edit-sub-wrap');
+      if (newSubs.length) {
+        wrap.style.display = '';
+        const sel = modal.querySelector('#edit-sub');
+        sel.innerHTML = `<option value="">（無）</option>` + newSubs.map(s => `<option value="${escapeHTML(s)}">${escapeHTML(s)}</option>`).join('');
+      } else {
+        wrap.style.display = 'none';
+      }
+    });
+  }
+
+  modal.querySelector('#edit-cancel').addEventListener('click', closeModal);
+
+  modal.querySelector('#edit-save').addEventListener('click', () => {
+    const cur = collectFromForm();
+    if (!(cur.amount > 0) || cur.amount > 9999999) {
+      toast('金額需為 1 到 9999999');
+      return;
+    }
+    if (working.type === 'transfer') {
+      if (!cur.fromAccount || !cur.toAccount) { toast('請選擇從/到帳戶'); return; }
+      if (cur.fromAccount === cur.toAccount) { toast('從與到帳戶不可相同'); return; }
+      // 改寫到 original
+      Object.assign(original, {
+        type: 'transfer',
+        amount: cur.amount,
+        fromAccount: cur.fromAccount,
+        toAccount: cur.toAccount,
+        transferPurpose: cur.transferPurpose,
+        note: (cur.note || '').slice(0, MAX_NOTE_LEN),
+        date: cur.date
+      });
+      delete original.category;
+      delete original.subcategory;
+      delete original.account;
+    } else {
+      if (!cur.category) { toast('請選擇分類'); return; }
+      if (!cur.account) { toast('請選擇帳戶'); return; }
+      Object.assign(original, {
+        type: working.type,
+        amount: cur.amount,
+        category: cur.category,
+        subcategory: cur.subcategory,
+        account: cur.account,
+        note: (cur.note || '').slice(0, MAX_NOTE_LEN),
+        date: cur.date
+      });
+      delete original.fromAccount;
+      delete original.toAccount;
+      delete original.transferPurpose;
+    }
+    saveState();
+    syncDispatch('update', toCloudPayload(original, found.book));
+    closeModal();
+    toast('已更新');
+    renderMain();
+  });
+
+  modal.querySelector('#edit-delete').addEventListener('click', () => {
+    openConfirm('確定要刪除這筆紀錄嗎？', () => {
+      const found2 = findEntry(id);
+      if (found2) {
+        const removedId = found2.entry.id;
+        state.entries[found2.book].splice(found2.idx, 1);
+        saveState();
+        syncDispatch('delete', { id: removedId });
+        toast('已刪除');
+        renderMain();
+      }
+    });
+  });
+}
+
+function openConfirm(message, onYes) {
+  const html = `
+    <div class="modal-title">${escapeHTML(message)}</div>
+    <div class="modal-actions">
+      <button class="btn" id="confirm-no">取消</button>
+      <button class="btn btn-danger" id="confirm-yes">確認</button>
+    </div>
+  `;
+  const modal = openModal(html, { top: true });
+  modal.querySelector('#confirm-no').addEventListener('click', closeModal);
+  modal.querySelector('#confirm-yes').addEventListener('click', () => {
+    closeModal();
+    onYes();
+  });
+}
+
+/* ===================================================
+ * Stats view
+ * =================================================== */
+function computeAccountBalances(book) {
+  const list = state.entries[book] || [];
+  const balances = {};
+  for (const a of state.accounts) balances[a.id] = 0;
+  for (const e of list) {
+    if (e.type === 'income' && e.account != null) {
+      balances[e.account] = (balances[e.account] || 0) + e.amount;
+    } else if (e.type === 'expense' && e.account != null) {
+      balances[e.account] = (balances[e.account] || 0) - e.amount;
+    } else if (e.type === 'transfer') {
+      if (e.fromAccount != null) balances[e.fromAccount] = (balances[e.fromAccount] || 0) - e.amount;
+      if (e.toAccount   != null) balances[e.toAccount]   = (balances[e.toAccount]   || 0) + e.amount;
+    }
+  }
+  return balances;
+}
+
+function renderAccountBalancesHTML() {
+  const list = state.entries[state.currentBook] || [];
+  if (!list.length) return '';
+  const balances = computeAccountBalances(state.currentBook);
+  // 列出有交易過的所有帳戶（含已封存），讓使用者看得到歷史餘額
+  const accIds = Object.keys(balances).filter(id => {
+    const acc = findAccount(id);
+    if (!acc) return false;
+    return balances[id] !== 0 || !acc.archived;
+  });
+  if (!accIds.length) return '';
+
+  // 排序：未封存優先、餘額由大到小
+  accIds.sort((a, b) => {
+    const A = findAccount(a), B = findAccount(b);
+    const archDiff = (A.archived ? 1 : 0) - (B.archived ? 1 : 0);
+    if (archDiff !== 0) return archDiff;
+    return balances[b] - balances[a];
+  });
+
+  const rows = accIds.map(id => {
+    const acc = findAccount(id);
+    const bal = balances[id];
+    const sign = bal > 0 ? '+' : (bal < 0 ? '−' : '');
+    const cls = bal > 0 ? 'text-income' : (bal < 0 ? 'text-expense' : '');
+    const archived = acc.archived ? '<span class="meta">(已封存)</span>' : '';
+    return `
+      <div class="balance-row" data-acc-detail="${id}" style="cursor:pointer">
+        <span class="label">
+          <span>${getAccountIcon(acc.type)}</span>
+          <span>${escapeHTML(acc.name)}</span>
+          ${archived}
+        </span>
+        <span class="amt ${cls}">${sign}${formatMoney(bal)} <span style="color:var(--ink-faint);font-weight:400;font-size:12px;margin-left:4px">›</span></span>
+      </div>
+    `;
+  }).join('');
+
+  const total = accIds.reduce((s, id) => s + balances[id], 0);
+  const totalSign = total > 0 ? '+' : (total < 0 ? '−' : '');
+
+  return `
+    <div class="card">
+      <h3>帳戶餘額（本帳本累計）</h3>
+      ${rows}
+      <div class="balance-total-row">
+        <span>合計</span>
+        <span class="amt">${totalSign}${formatMoney(total)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderStatsHTML() {
+  const balanceHTML = renderAccountBalancesHTML();
+  const ym = state.ui.viewMonth;
+  const entries = getMonthEntries(state.currentBook, ym);
+
+  if (entries.length === 0) {
+    return balanceHTML + `
+      <div class="empty-state">
+        <div class="icon">📊</div>
+        <div>本月還沒有資料，記一筆看看吧</div>
+      </div>
+    `;
+  }
+
+  const expenseHTML = renderStatsGroup(entries, 'expense', '本月支出分類');
+  const incomeHTML = renderStatsGroup(entries, 'income', '本月收入分類');
+  const transferHTML = renderTransferStatsHTML(entries);
+
+  const monthly = (expenseHTML + incomeHTML + transferHTML);
+  if (!monthly) {
+    return balanceHTML + `
+      <div class="empty-state">
+        <div class="icon">📊</div>
+        <div>本月還沒有可統計的資料</div>
+      </div>
+    `;
+  }
+  return balanceHTML + monthly;
+}
+
+function renderStatsGroup(entries, type, title) {
+  const list = entries.filter(e => e.type === type);
+  if (!list.length) return '';
+
+  const byCat = {};
+  list.forEach(e => {
+    if (!byCat[e.category]) byCat[e.category] = { total: 0, subs: {} };
+    byCat[e.category].total += e.amount;
+    const subKey = e.subcategory || '(無細項)';
+    byCat[e.category].subs[subKey] = (byCat[e.category].subs[subKey] || 0) + e.amount;
+  });
+
+  const grandTotal = Object.values(byCat).reduce((s, c) => s + c.total, 0);
+  if (grandTotal === 0) return '';
+
+  const rows = Object.entries(byCat)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([catId, data]) => {
+      const cat = findCat(type, catId);
+      const emoji = cat?.emoji || '•';
+      const name = cat?.name || catId;
+      const pct = (data.total / grandTotal * 100);
+      const pctText = pct.toFixed(pct < 10 ? 1 : 0) + '%';
+      const sign = type === 'expense' ? '−' : '+';
+      const cls = type === 'expense' ? 'expense' : 'income';
+      const subEntries = Object.entries(data.subs).sort((a,b) => b[1] - a[1]);
+      const hasMultipleSubs = subEntries.length > 1 || (subEntries[0] && subEntries[0][0] !== '(無細項)');
+      const subHTML = hasMultipleSubs ? `
+        <div class="sub-stats hidden" data-sub-of="${catId}">
+          ${subEntries.map(([sub, amt]) => `
+            <div class="sub-stat-item">
+              <span>${escapeHTML(sub)}</span>
+              <span>${sign}${formatMoney(amt)}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '';
+
+      return `
+        <div class="stat-row">
+          <div class="stat-head" data-cat="${catId}" data-has-subs="${hasMultipleSubs}">
+            <span class="label"><span>${emoji}</span><span>${escapeHTML(name)}</span></span>
+            <span class="amount ${cls === 'expense' ? 'text-expense' : 'text-income'}">${sign}${formatMoney(data.total)}</span>
+            <span class="percent">${pctText}</span>
+          </div>
+          <div class="stat-bar">
+            <div class="stat-bar-fill ${cls}" style="width:${Math.min(100, pct)}%"></div>
+          </div>
+          ${subHTML}
+        </div>
+      `;
+    }).join('');
+
+  return `
+    <div class="card">
+      <h3>${title}（合計 ${formatMoney(grandTotal)}）</h3>
+      ${rows}
+    </div>
+  `;
+}
+
+function renderTransferStatsHTML(entries) {
+  const list = entries.filter(e => e.type === 'transfer');
+  if (!list.length) return '';
+  const total = list.reduce((s, e) => s + e.amount, 0);
+  const rowsHTML = list
+    .slice()
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map(e => {
+      const from = findAccount(e.fromAccount);
+      const to = findAccount(e.toAccount);
+      const fromName = from ? from.name : (e.fromAccount || '?');
+      const toName = to ? to.name : (e.toAccount || '?');
+      const purpose = e.transferPurpose ? `<span class="purpose">(${escapeHTML(e.transferPurpose)})</span>` : '';
+      return `
+        <div class="transfer-stat-row">
+          <div class="flow">↔️ ${escapeHTML(fromName)} → ${escapeHTML(toName)} ${purpose}</div>
+          <div class="amt">${formatMoney(e.amount)}</div>
+        </div>
+      `;
+    }).join('');
+  return `
+    <div class="card">
+      <h3>本月轉帳明細</h3>
+      ${rowsHTML}
+      <div class="transfer-total-row">共 <span class="amt">${formatMoney(total)}</span></div>
+    </div>
+  `;
+}
+
+function bindStatsEvents() {
+  document.querySelectorAll('.stat-head').forEach(el => {
+    if (el.dataset.hasSubs !== 'true') return;
+    el.addEventListener('click', () => {
+      const catId = el.dataset.cat;
+      const sub = document.querySelector(`[data-sub-of="${catId}"]`);
+      if (sub) sub.classList.toggle('hidden');
+    });
+  });
+  // 點帳戶餘額列 → 開帳戶明細 modal
+  document.querySelectorAll('[data-acc-detail]').forEach(el => {
+    el.addEventListener('click', () => openAccountDetailModal(el.dataset.accDetail));
+  });
+}
+
+/* ===================================================
+ * 帳戶明細 modal — 跨所有帳本列出該帳戶的所有紀錄
+ * 餘額是跨帳本累計（夢想帳戶等共用蓄水池場景）
+ * 每筆紀錄顯示來自哪本帳本
+ * =================================================== */
+function openAccountDetailModal(accId) {
+  const acc = findAccount(accId);
+  if (!acc) return;
+
+  // 從所有帳本收集牽涉到該帳戶的紀錄
+  const allEntries = [];
+  for (const book of state.books) {
+    for (const e of (state.entries[book] || [])) {
+      if (e.account === accId || e.fromAccount === accId || e.toAccount === accId) {
+        allEntries.push({ ...e, _book: book });
+      }
+    }
+  }
+  allEntries.sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt - a.createdAt));
+
+  // 計算總餘額 + 每本帳本各自貢獻
+  let totalBalance = 0;
+  const bookBalances = {};
+  for (const book of state.books) bookBalances[book] = 0;
+  for (const e of allEntries) {
+    let delta = 0;
+    if (e.type === 'income' && e.account === accId) delta = e.amount;
+    else if (e.type === 'expense' && e.account === accId) delta = -e.amount;
+    else if (e.type === 'transfer') {
+      if (e.toAccount === accId) delta += e.amount;
+      if (e.fromAccount === accId) delta -= e.amount;
+    }
+    totalBalance += delta;
+    bookBalances[e._book] = (bookBalances[e._book] || 0) + delta;
+  }
+
+  const balColor = totalBalance > 0 ? 'var(--income)' : (totalBalance < 0 ? 'var(--expense)' : 'var(--ink)');
+  const balSign = totalBalance > 0 ? '+' : (totalBalance < 0 ? '−' : '');
+
+  // 多本帳本都有貢獻時顯示分解（共用蓄水池）
+  const booksWithActivity = state.books.filter(b => bookBalances[b] !== 0);
+  let contribHTML = '';
+  if (booksWithActivity.length > 1) {
+    const chips = booksWithActivity.map(b => {
+      const v = bookBalances[b];
+      const s = v > 0 ? '+' : (v < 0 ? '−' : '');
+      const color = v > 0 ? 'var(--income)' : (v < 0 ? 'var(--expense)' : 'var(--ink-faint)');
+      return `<div style="display:inline-flex;align-items:center;gap:6px;background:var(--bg-soft);border-radius:var(--radius-pill);padding:4px 10px;margin:2px;font-size:12px">
+        <span style="color:var(--ink-soft)">${escapeHTML(b)}</span>
+        <span style="color:${color};font-weight:600;font-variant-numeric:tabular-nums">${s}${formatMoney(v)}</span>
+      </div>`;
+    }).join('');
+    contribHTML = `<div style="margin-top:8px">${chips}</div>`;
+  }
+
+  const scopeLabel = booksWithActivity.length > 1 ? '跨帳本累計' : (booksWithActivity.length === 1 ? `${booksWithActivity[0]} 累計` : '尚無紀錄');
+
+  const entriesHTML = allEntries.length
+    ? `<div class="entry-list">${allEntries.map(e => renderAccountDetailEntry(e, accId, true)).join('')}</div>`
+    : '<div class="empty-state" style="padding:30px 10px;font-size:13px">這個帳戶還沒有紀錄</div>';
+
+  const html = `
+    <div class="modal-title">
+      ${getAccountIcon(acc.type)} ${escapeHTML(acc.name)}
+      ${acc.archived ? '<span style="color:var(--ink-faint);font-size:12px">（已封存）</span>' : ''}
+    </div>
+    <div style="text-align:center;padding:18px 14px;background:var(--card);border-radius:var(--radius-card);box-shadow:var(--shadow);margin-bottom:14px">
+      <div style="font-size:12px;color:var(--ink-soft)">目前餘額（${scopeLabel}）</div>
+      <div style="font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;color:${balColor};letter-spacing:-0.02em">
+        ${balSign}${formatMoney(totalBalance)}
+      </div>
+      ${contribHTML}
+      ${acc.purpose ? `<div style="font-size:12px;color:var(--ink-faint);margin-top:6px">用途：${escapeHTML(acc.purpose)}</div>` : ''}
+      ${acc.bank ? `<div style="font-size:12px;color:var(--ink-faint)">${escapeHTML(acc.bank)}</div>` : ''}
+    </div>
+    <div style="margin-bottom:8px;font-size:13px;color:var(--ink-soft)">共 ${allEntries.length} 筆紀錄（點擊可編輯）</div>
+    ${entriesHTML}
+    <div class="modal-actions">
+      <button class="btn" id="ad-close">關閉</button>
+      <button class="btn btn-primary" id="ad-spend" ${acc.archived ? 'disabled' : ''}>從此帳戶花一筆</button>
+    </div>
+  `;
+  const modal = openModal(html);
+
+  modal.querySelector('#ad-close').addEventListener('click', closeModal);
+
+  modal.querySelector('#ad-spend').addEventListener('click', () => {
+    // 切到記帳頁，draft 預填為支出+此帳戶；紀錄會進當前帳本
+    state.ui.tab = 'record';
+    state.ui.draft = {
+      ...emptyDraft(),
+      type: 'expense',
+      account: accId
+    };
+    closeModal();
+    renderTabbar();
+    renderMain();
+    toast(`目前在「${state.currentBook}」帳本記，要換帳本請點 Header 切換`);
+  });
+
+  modal.querySelectorAll('.entry-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.id;
+      closeModal();
+      openEntryEditor(id);
+    });
+  });
+}
+
+function renderAccountDetailEntry(e, accId, showBook) {
+  let sign, cls, icon, title;
+  if (e.type === 'transfer') {
+    if (e.fromAccount === accId) {
+      const to = findAccount(e.toAccount);
+      sign = '−'; cls = 'expense'; icon = '↗';
+      title = `轉出至 ${escapeHTML(to?.name || '?')}`;
+    } else {
+      const from = findAccount(e.fromAccount);
+      sign = '+'; cls = 'income'; icon = '↙';
+      title = `從 ${escapeHTML(from?.name || '?')} 轉入`;
+    }
+    if (e.transferPurpose) title += ` · ${escapeHTML(e.transferPurpose)}`;
+  } else if (e.type === 'income') {
+    sign = '+'; cls = 'income';
+    const cat = findCat('income', e.category);
+    icon = cat?.emoji || '➕';
+    title = `${escapeHTML(cat?.name || '收入')}${e.subcategory ? ' · ' + escapeHTML(e.subcategory) : ''}`;
+  } else {
+    sign = '−'; cls = 'expense';
+    const cat = findCat('expense', e.category);
+    icon = cat?.emoji || '➖';
+    title = `${escapeHTML(cat?.name || '支出')}${e.subcategory ? ' · ' + escapeHTML(e.subcategory) : ''}`;
+  }
+  const noteText = e.note ? escapeHTML(e.note) : '';
+  const schedTag = e.scheduleId ? ' <span class="entry-tag">排程</span>' : '';
+  const bookTag = (showBook && e._book) ? ` <span class="entry-tag" style="background:var(--accent-soft);color:var(--accent)">${escapeHTML(e._book)}</span>` : '';
+  return `
+    <div class="entry-item" data-id="${e.id}">
+      <div class="entry-emoji">${icon}</div>
+      <div class="entry-body">
+        <div class="entry-title">${e.date.slice(5).replace('-','/')} · ${title}${bookTag}${schedTag}</div>
+        ${noteText ? `<div class="entry-note">${noteText}</div>` : ''}
+      </div>
+      <div class="entry-amount ${cls}">${sign}${formatMoney(e.amount)}</div>
+    </div>
+  `;
+}
+
+/* ===================================================
+ * Settings view
+ * =================================================== */
+function renderSettingsHTML() {
+  const stats = state.books.map(b => {
+    const n = (state.entries[b] || []).length;
+    return `<div class="setting-row"><div class="setting-label"><div class="title">${escapeHTML(b)}</div></div><div>${n} 筆</div></div>`;
+  }).join('');
+
+  const activeAccCount = getActiveAccounts().length;
+  const archivedCount = state.accounts.length - activeAccCount;
+  const activeSchedules = state.schedules.filter(s => s.active).length;
+
+  return `
+    <div class="card" id="sync-section">
+      <h3>☁️ 雲端同步</h3>
+      <div id="sync-status-line" style="margin-bottom:10px">${syncStatusLineHTML()}</div>
+      <div class="form-field">
+        <label>Web App URL（Apps Script 部署後取得）</label>
+        <input id="sync-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" value="${escapeHTML(state.sync.endpointUrl || '')}">
+      </div>
+      <div class="form-field">
+        <label>API Secret</label>
+        <input id="sync-secret" type="password" placeholder="64 字元亂數" value="${escapeHTML(state.sync.apiSecret || '')}" autocomplete="off">
+      </div>
+      <div class="modal-actions" style="margin-top:0">
+        <button class="btn" id="btn-sync-test">測試連線</button>
+        <button class="btn btn-primary" id="btn-sync-save">儲存設定</button>
+      </div>
+      <div class="setting-row" style="margin-top:6px">
+        <div class="setting-label">
+          <div class="title">排隊中 · 失敗紀錄</div>
+          <div class="desc">${state.sync.pendingQueue.length} 筆待送 · ${state.sync.failed.length} 筆失敗</div>
+        </div>
+        <button class="btn" id="btn-sync-flush" ${state.sync.pendingQueue.length === 0 || !syncEnabled() ? 'disabled' : ''}>立即同步</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">全部上傳到雲端</div>
+          <div class="desc">把本機所有紀錄推到 Sheets（初次設定或大量補登用）</div>
+        </div>
+        <button class="btn" id="btn-sync-upload" ${syncEnabled() ? '' : 'disabled'}>全部上傳</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">從雲端還原</div>
+          <div class="desc">清空本機後從 Sheets 拉回（換手機或重灌用）</div>
+        </div>
+        <button class="btn btn-danger" id="btn-sync-restore" ${syncEnabled() ? '' : 'disabled'}>還原</button>
+      </div>
+      ${state.sync.failed.length > 0 ? `
+        <div class="setting-row">
+          <div class="setting-label">
+            <div class="title">失敗詳情</div>
+            <div class="desc">點檢視可看每筆失敗原因 · 或清空</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn" id="btn-sync-failed">檢視</button>
+            <button class="btn btn-ghost" id="btn-sync-failed-clear">清空</button>
+          </div>
+        </div>
+      ` : ''}
+    </div>
+
+    <div class="card">
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">管理帳本</div>
+          <div class="desc">目前: ${state.books.length} 本</div>
+        </div>
+        <button class="btn" id="btn-manage-books">管理</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">管理帳戶</div>
+          <div class="desc">啟用 ${activeAccCount} 個${archivedCount ? ` · 封存 ${archivedCount} 個` : ''}</div>
+        </div>
+        <button class="btn" id="btn-manage-accounts">管理</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">定期扣款 / 排程</div>
+          <div class="desc">${activeSchedules > 0 ? `啟用 ${activeSchedules} 個` : '尚未設定'}${state.schedules.length > activeSchedules ? `（共 ${state.schedules.length} 個）` : ''} · 每月自動建立轉帳/支出/收入</div>
+        </div>
+        <button class="btn" id="btn-manage-schedules">管理</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">匯出 CSV（本月）</div>
+          <div class="desc">當前帳本 · ${state.ui.viewMonth}</div>
+        </div>
+        <button class="btn" id="btn-export-month">匯出本月</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">匯出 CSV（全部）</div>
+          <div class="desc">當前帳本所有資料</div>
+        </div>
+        <button class="btn" id="btn-export-all">匯出全部</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">匯入 CSV</div>
+          <div class="desc">追加到當前帳本 · 相容 v1.0 / v1.1 格式</div>
+        </div>
+        <button class="btn" id="btn-import">匯入</button>
+        <input type="file" id="import-file" accept=".csv,text/csv" style="display:none">
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>資料統計</h3>
+      ${stats}
+    </div>
+
+    <div class="card">
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">清空當前帳本</div>
+          <div class="desc">刪除「${escapeHTML(state.currentBook)}」所有資料</div>
+        </div>
+        <button class="btn btn-danger" id="btn-clear">清空</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>關於</h3>
+      <div style="font-size:13px;color:var(--ink-soft);line-height:1.7">
+        記帳本 v${APP_VERSION}<br>
+        純本地儲存 · 完全離線 · 含轉帳/帳戶/排程<br>
+        資料儲存於瀏覽器 localStorage（key: <code>${STORAGE_KEY}</code>）
+      </div>
+    </div>
+  `;
+}
+
+function bindSettingsEvents() {
+  document.getElementById('btn-manage-books').addEventListener('click', openBookManager);
+  document.getElementById('btn-manage-accounts').addEventListener('click', openAccountManager);
+  document.getElementById('btn-manage-schedules').addEventListener('click', openScheduleManager);
+  document.getElementById('btn-export-month').addEventListener('click', () => exportCSV('month'));
+  document.getElementById('btn-export-all').addEventListener('click', () => exportCSV('all'));
+  document.getElementById('btn-import').addEventListener('click', () => {
+    document.getElementById('import-file').click();
+  });
+  document.getElementById('import-file').addEventListener('change', handleImportFile);
+  document.getElementById('btn-clear').addEventListener('click', confirmClearBook);
+
+  // ☁️ 雲端同步
+  document.getElementById('btn-sync-test').addEventListener('click', onClickSyncTest);
+  document.getElementById('btn-sync-save').addEventListener('click', onClickSyncSave);
+  const flushBtn = document.getElementById('btn-sync-flush');
+  if (flushBtn) flushBtn.addEventListener('click', () => { flushQueue().then(updateSyncBadge); });
+  const upBtn = document.getElementById('btn-sync-upload');
+  if (upBtn) upBtn.addEventListener('click', onClickSyncBatchUpload);
+  const reBtn = document.getElementById('btn-sync-restore');
+  if (reBtn) reBtn.addEventListener('click', onClickSyncRestore);
+  const failBtn = document.getElementById('btn-sync-failed');
+  if (failBtn) failBtn.addEventListener('click', openSyncFailedModal);
+  const clearFailBtn = document.getElementById('btn-sync-failed-clear');
+  if (clearFailBtn) clearFailBtn.addEventListener('click', () => {
+    openConfirm(`清空 ${state.sync.failed.length} 筆失敗紀錄？`, () => {
+      state.sync.failed = [];
+      saveSyncState();
+      renderMain();
+      toast('已清空');
+    });
+  });
+}
+
+/* ===================================================
+ * 設定頁雲端同步：按鈕事件
+ * =================================================== */
+async function onClickSyncTest() {
+  const url = document.getElementById('sync-url').value.trim();
+  const secret = document.getElementById('sync-secret').value.trim();
+  if (!url || !secret) { toast('請先填 URL 與 Secret'); return; }
+  toast('測試中…');
+  const res = await pingEndpoint(url, secret);
+  if (res && res.ok && res.data === 'pong') {
+    toast('✅ 連線成功');
+  } else {
+    const msg = (res && res.error) ? res.error : '連線失敗';
+    toast('❌ ' + msg);
+  }
+}
+
+async function onClickSyncSave() {
+  const url = document.getElementById('sync-url').value.trim();
+  const secret = document.getElementById('sync-secret').value.trim();
+  if (!url || !secret) { toast('請先填 URL 與 Secret'); return; }
+  if (!/^https:\/\/script\.google\.com\//.test(url)) {
+    toast('URL 看起來不像 Apps Script Web App，請確認');
+    return;
+  }
+  const wasEnabled = syncEnabled();
+  // 先 ping 一次
+  toast('連線測試中…');
+  const ping = await pingEndpoint(url, secret);
+  if (!(ping && ping.ok && ping.data === 'pong')) {
+    toast('❌ 連線失敗：' + ((ping && ping.error) || 'unknown'));
+    return;
+  }
+  state.sync.endpointUrl = url;
+  state.sync.apiSecret = secret;
+  state.sync.enabled = true;
+  state.sync.lastError = null;
+  saveSyncState();
+  renderHeader();
+  renderMain();
+  toast('✅ 已儲存設定');
+
+  // 首次啟用：若本機有資料、雲端為空 → 提示批次上傳
+  if (!wasEnabled) {
+    const totalLocal = countAllEntries();
+    if (totalLocal > 0) {
+      const remoteCount = await getRemoteCount(url, secret);
+      if (remoteCount === 0) {
+        openConfirm(`本機有 ${totalLocal} 筆紀錄，雲端為空。要全部上傳嗎？`, () => {
+          batchUploadAll();
+        });
+      } else if (remoteCount > 0) {
+        toast(`雲端已有 ${remoteCount} 筆，未自動上傳避免重複`);
+      }
+    }
+  }
+}
+
+async function batchUploadAll() {
+  if (!syncEnabled()) return;
+  const list = collectAllEntriesWithBook();
+  if (!list.length) { toast('沒有資料可上傳'); return; }
+
+  const CHUNK = 50;
+  let inserted = 0, skipped = 0, errors = 0;
+  toast(`開始上傳 ${list.length} 筆…`);
+
+  for (let i = 0; i < list.length; i += CHUNK) {
+    const slice = list.slice(i, i + CHUNK);
+    const payload = slice.map(({ entry, book }) => toCloudPayload(entry, book));
+    try {
+      const res = await fetch(state.sync.endpointUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          secret: state.sync.apiSecret,
+          action: 'appendBatch',
+          payload: payload
+        }),
+        redirect: 'follow'
+      });
+      const data = await res.json();
+      if (data.ok) {
+        inserted += data.data.inserted || 0;
+        skipped += data.data.skipped || 0;
+        errors += (data.data.errors || []).length;
+      } else {
+        errors += slice.length;
+        state.sync.lastError = data.error || 'batch failed';
+      }
+    } catch (err) {
+      errors += slice.length;
+      state.sync.lastError = err.message;
+      break;
+    }
+  }
+  state.sync.lastSyncedAt = Date.now();
+  saveSyncState();
+  renderMain();
+  toast(`✅ 上傳完成：成功 ${inserted}、跳過 ${skipped}、失敗 ${errors}`);
+}
+
+async function onClickSyncBatchUpload() {
+  if (!syncEnabled()) { toast('請先儲存雲端設定'); return; }
+  openConfirm(`要把本機 ${countAllEntries()} 筆紀錄全部上傳到雲端嗎？\n（重複 id 會自動跳過）`, () => {
+    batchUploadAll();
+  });
+}
+
+function onClickSyncRestore() {
+  if (!syncEnabled()) { toast('請先儲存雲端設定'); return; }
+  // 二次確認，需打字「還原」
+  const html = `
+    <div class="modal-title">從雲端還原</div>
+    <div style="color:var(--ink-soft);font-size:13px;text-align:center;line-height:1.7;margin-bottom:10px">
+      將從雲端拉回所有紀錄，<strong>本機所有現有交易資料會被覆寫</strong>。<br>
+      帳本、帳戶、排程設定不受影響。<br>
+      請輸入「<strong style="color:var(--expense)">還原</strong>」二字確認。
+    </div>
+    <input id="restore-input" type="text" placeholder="輸入「還原」" style="width:100%;text-align:center;font-size:15px">
+    <div class="modal-actions">
+      <button class="btn" id="restore-cancel">取消</button>
+      <button class="btn btn-danger" id="restore-yes" disabled>確認還原</button>
+    </div>
+  `;
+  const modal = openModal(html, { top: true });
+  const input = modal.querySelector('#restore-input');
+  const yes = modal.querySelector('#restore-yes');
+  input.addEventListener('input', () => {
+    yes.disabled = (input.value.trim() !== '還原');
+  });
+  modal.querySelector('#restore-cancel').addEventListener('click', closeModal);
+  yes.addEventListener('click', () => {
+    closeModal();
+    restoreFromCloud();
+  });
+  setTimeout(() => input.focus(), 100);
+}
+
+async function restoreFromCloud() {
+  toast('從雲端拉取中…');
+  try {
+    const res = await fetch(state.sync.endpointUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        secret: state.sync.apiSecret,
+        action: 'getEntries',
+        payload: {}
+      }),
+      redirect: 'follow'
+    });
+    const data = await res.json();
+    if (!(data && data.ok)) {
+      toast('❌ 拉取失敗：' + (data.error || 'unknown'));
+      return;
+    }
+    const entries = (data.data && data.data.entries) || [];
+    const restored = applyRestoredEntries(entries);
+    saveState();
+    state.sync.lastSyncedAt = Date.now();
+    state.sync.pendingQueue = []; // 還原後清掉待送（避免重送）
+    saveSyncState();
+    renderHeader();
+    renderMain();
+    toast(`✅ 已還原 ${restored.total} 筆（新增 ${restored.newAccounts} 個帳戶、${restored.newBooks} 本帳本）`);
+  } catch (err) {
+    toast('❌ 拉取錯誤：' + err.message);
+  }
+}
+
+// 把雲端中文欄位轉回 PWA 內部結構，並寫入 state.entries
+function applyRestoredEntries(entries) {
+  let newAccounts = 0;
+  let newBooks = 0;
+
+  // 清空現有 entries（保留 books/accounts/schedules）
+  for (const b of state.books) state.entries[b] = [];
+
+  for (const row of entries) {
+    const type = chineseToType(row.type);
+    if (!type) continue;
+    const book = row.book || state.currentBook;
+    if (!state.books.includes(book)) {
+      state.books.push(book);
+      state.entries[book] = [];
+      newBooks++;
+    }
+    // 帳戶映射（找不到自動建）
+    const ensureAcc = (name) => {
+      if (!name) return null;
+      const existing = findAccountByName(name);
+      if (existing) return existing.id;
+      const newAcc = { id: genId('acc'), name, type: 'cash' };
+      state.accounts.push(newAcc);
+      newAccounts++;
+      return newAcc.id;
+    };
+
+    const e = {
+      id: row.id,
+      type,
+      amount: Number(row.amount) || 0,
+      date: row.date,
+      note: row.note || '',
+      createdAt: Number(row.createdAt) || Date.now(),
+      scheduleId: row.scheduleId || undefined
+    };
+    if (type === 'transfer') {
+      e.fromAccount = ensureAcc(row.fromAccount);
+      e.toAccount = ensureAcc(row.toAccount);
+    } else {
+      // 類別：找不到放 other / other_in
+      const catId = catNameToId(type, row.category);
+      e.category = catId || (type === 'expense' ? 'other' : 'other_in');
+      e.subcategory = row.subcategory || null;
+      e.account = ensureAcc(row.account);
+    }
+    state.entries[book].push(e);
+  }
+  // 確保預設帳戶存在
+  if (!state.accounts.some(a => a.isDefault && !a.archived)) {
+    const first = getActiveAccounts()[0];
+    if (first) first.isDefault = true;
+  }
+  return { total: entries.length, newAccounts, newBooks };
+}
+
+function openSyncFailedModal() {
+  const items = state.sync.failed.map((it, i) => {
+    const p = it.payload || {};
+    return `<div class="book-list-item" style="flex-direction:column;align-items:flex-start;gap:4px">
+      <div style="font-weight:600">${escapeHTML(it.op)} · id=${escapeHTML(p.id || '?')}</div>
+      <div style="font-size:11px;color:var(--ink-faint)">${escapeHTML(it._error || '')}</div>
+    </div>`;
+  }).join('');
+  openModal(`
+    <div class="modal-title">失敗紀錄（${state.sync.failed.length} 筆）</div>
+    ${items || '<div class="empty-state">沒有失敗紀錄</div>'}
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeModal()">關閉</button>
+    </div>
+  `);
+}
+
+/* ===================================================
+ * 帳本切換 / 管理
+ * =================================================== */
+function openBookSelector() {
+  const items = state.books.map(b => `
+    <div class="book-list-item ${b === state.currentBook ? 'current' : ''}" data-book="${escapeHTML(b)}">
+      <span class="name">${escapeHTML(b)}</span>
+      <span style="color:var(--ink-faint);font-size:12px">${(state.entries[b] || []).length} 筆</span>
+    </div>
+  `).join('');
+  const addItem = `
+    <div class="book-list-item" id="bs-add"
+         style="border:1.5px dashed var(--accent);background:transparent;color:var(--accent);cursor:pointer;justify-content:center">
+      <span class="name">＋ 新增帳本</span>
+    </div>
+  `;
+  const html = `
+    <div class="modal-title">切換帳本</div>
+    ${items}
+    ${addItem}
+    <div class="modal-actions">
+      <button class="btn" id="bs-manage">管理</button>
+      <button class="btn btn-primary" id="bs-close">完成</button>
+    </div>
+  `;
+  const modal = openModal(html);
+  modal.querySelectorAll('.book-list-item[data-book]').forEach(el => {
+    el.addEventListener('click', () => {
+      const b = el.dataset.book;
+      if (b && b !== state.currentBook) {
+        state.currentBook = b;
+        saveState();
+        renderHeader();
+        renderMain();
+      }
+      closeModal();
+    });
+  });
+  modal.querySelector('#bs-add').addEventListener('click', () => {
+    closeModal();
+    openBookAddModal((name) => {
+      if (name) {
+        state.currentBook = name;
+        saveState();
+        renderHeader();
+        renderMain();
+      } else {
+        openBookSelector();
+      }
+    });
+  });
+  modal.querySelector('#bs-close').addEventListener('click', closeModal);
+  modal.querySelector('#bs-manage').addEventListener('click', () => {
+    closeModal();
+    openBookManager();
+  });
+}
+
+// 共用的「新增帳本」小視窗。onDone(name) — 成功時帶名字，取消時帶 null
+function openBookAddModal(onDone) {
+  const html = `
+    <div class="modal-title">新增帳本</div>
+    <div class="form-field">
+      <label>名稱</label>
+      <input id="bab-name" type="text" maxlength="20" placeholder="例如：夢想帳戶">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="bab-cancel">取消</button>
+      <button class="btn btn-primary" id="bab-save">新增</button>
+    </div>
+  `;
+  const modal = openModal(html, { top: true });
+  const input = modal.querySelector('#bab-name');
+  setTimeout(() => input.focus(), 100);
+
+  const submit = () => {
+    const name = input.value.trim();
+    if (!name) { toast('請輸入帳本名稱'); return; }
+    if (state.books.includes(name)) { toast('已有同名帳本'); return; }
+    if (name.length > 20) { toast('名稱最多 20 字'); return; }
+    state.books.push(name);
+    state.entries[name] = [];
+    saveState();
+    closeModal();
+    toast(`已新增「${name}」`);
+    if (onDone) onDone(name);
+  };
+
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); submit(); }
+  });
+  modal.querySelector('#bab-cancel').addEventListener('click', () => {
+    closeModal();
+    if (onDone) onDone(null);
+  });
+  modal.querySelector('#bab-save').addEventListener('click', submit);
+}
+
+function openBookManager() {
+  const items = state.books.map(b => `
+    <div class="book-list-item ${b === state.currentBook ? 'current' : ''}">
+      <span class="name">${escapeHTML(b)} <span style="color:var(--ink-faint);font-size:12px">(${(state.entries[b] || []).length} 筆)</span></span>
+      <button class="btn btn-danger" data-del-book="${escapeHTML(b)}" ${state.books.length <= 1 ? 'disabled' : ''}>刪除</button>
+    </div>
+  `).join('');
+  const html = `
+    <div class="modal-title">帳本管理</div>
+    ${items}
+    <div class="modal-actions">
+      <button class="btn" id="bm-close">關閉</button>
+      <button class="btn btn-primary" id="bm-add">＋ 新增帳本</button>
+    </div>
+  `;
+  const modal = openModal(html);
+  modal.querySelector('#bm-close').addEventListener('click', closeModal);
+  modal.querySelector('#bm-add').addEventListener('click', () => {
+    closeModal();
+    openBookAddModal((name) => {
+      // 不論成功與否都回到管理頁
+      openBookManager();
+    });
+  });
+  modal.querySelectorAll('[data-del-book]').forEach(b => {
+    b.addEventListener('click', () => {
+      const target = b.dataset.delBook;
+      const cnt = (state.entries[target] || []).length;
+      openConfirm(`刪除「${target}」會清掉 ${cnt} 筆資料，無法復原。確定？`, () => {
+        const idx = state.books.indexOf(target);
+        if (idx < 0) return;
+        state.books.splice(idx, 1);
+        delete state.entries[target];
+        if (state.currentBook === target) {
+          state.currentBook = state.books[0];
+        }
+        saveState();
+        renderHeader();
+        renderMain();
+        closeModal();
+        toast(`已刪除「${target}」`);
+        if (state.books.length) openBookManager();
+      });
+    });
+  });
+}
+
+/* ===================================================
+ * 帳戶管理 modal
+ * =================================================== */
+function openAccountManager() {
+  const items = state.accounts.map(a => {
+    const usage = countEntriesUsingAccount(a.id);
+    const badges = [];
+    if (a.isDefault) badges.push('<span class="badge">預設</span>');
+    if (a.archived) badges.push('<span class="badge archived">已封存</span>');
+    const meta = [];
+    meta.push(getAccountTypeName(a.type));
+    if (a.bank) meta.push(escapeHTML(a.bank));
+    if (a.purpose) meta.push(escapeHTML(a.purpose));
+    meta.push(`${usage} 筆紀錄`);
+    return `
+      <div class="acc-list-item">
+        <div class="info">
+          <div class="name">
+            <span>${getAccountIcon(a.type)}</span>
+            <span>${escapeHTML(a.name)}</span>
+            ${badges.join('')}
+          </div>
+          <div class="meta">${meta.join(' · ')}</div>
+        </div>
+        <div class="actions">
+          <button class="btn" data-edit-acc="${a.id}">編輯</button>
+          ${a.archived
+            ? `<button class="btn btn-ghost" data-unarchive-acc="${a.id}">啟用</button>`
+            : `<button class="btn btn-danger" data-archive-acc="${a.id}">${usage > 0 ? '封存' : '刪除'}</button>`}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const html = `
+    <div class="modal-title">帳戶管理</div>
+    ${items || '<div class="empty-state">尚未設定帳戶</div>'}
+    <div class="modal-actions">
+      <button class="btn" id="am-close">關閉</button>
+      <button class="btn btn-primary" id="am-add">＋ 新增帳戶</button>
+    </div>
+  `;
+  const modal = openModal(html);
+  modal.querySelector('#am-close').addEventListener('click', closeModal);
+  modal.querySelector('#am-add').addEventListener('click', () => {
+    openAccountEditor(null, () => openAccountManager());
+  });
+  modal.querySelectorAll('[data-edit-acc]').forEach(b => {
+    b.addEventListener('click', () => {
+      openAccountEditor(b.dataset.editAcc, () => openAccountManager());
+    });
+  });
+  modal.querySelectorAll('[data-archive-acc]').forEach(b => {
+    b.addEventListener('click', () => {
+      const id = b.dataset.archiveAcc;
+      const acc = findAccount(id);
+      if (!acc) return;
+      const usage = countEntriesUsingAccount(id);
+      if (usage === 0) {
+        openConfirm(`刪除帳戶「${acc.name}」？`, () => {
+          state.accounts = state.accounts.filter(x => x.id !== id);
+          if (acc.isDefault) {
+            const next = getActiveAccounts()[0];
+            if (next) next.isDefault = true;
+          }
+          saveState();
+          toast('已刪除');
+          openAccountManager();
+        });
+      } else {
+        openConfirm(`此帳戶有 ${usage} 筆紀錄。封存後不再出現於選擇器，但歷史紀錄保留。確認？`, () => {
+          acc.archived = true;
+          if (acc.isDefault) {
+            acc.isDefault = false;
+            const next = getActiveAccounts()[0];
+            if (next) next.isDefault = true;
+          }
+          saveState();
+          toast('已封存');
+          openAccountManager();
+        });
+      }
+    });
+  });
+  modal.querySelectorAll('[data-unarchive-acc]').forEach(b => {
+    b.addEventListener('click', () => {
+      const id = b.dataset.unarchiveAcc;
+      const acc = findAccount(id);
+      if (!acc) return;
+      acc.archived = false;
+      saveState();
+      toast('已啟用');
+      openAccountManager();
+    });
+  });
+}
+
+function openAccountEditor(id, onDone) {
+  const isEdit = !!id;
+  const acc = isEdit ? findAccount(id) : { name: '', type: 'checking', bank: '', purpose: '', isDefault: state.accounts.length === 0 };
+  if (isEdit && !acc) return;
+
+  const typeOptions = ACCOUNT_TYPES.map(t =>
+    `<option value="${t.id}" ${t.id === acc.type ? 'selected' : ''}>${t.emoji} ${escapeHTML(t.name)}</option>`
+  ).join('');
+
+  const html = `
+    <div class="modal-title">${isEdit ? '編輯帳戶' : '新增帳戶'}</div>
+    <div class="form-field">
+      <label>名稱</label>
+      <input id="ae-name" type="text" maxlength="20" value="${escapeHTML(acc.name || '')}" placeholder="例如：華南儲蓄">
+    </div>
+    <div class="form-field">
+      <label>類型</label>
+      <select id="ae-type">${typeOptions}</select>
+    </div>
+    <div class="form-field">
+      <label>銀行（可選）</label>
+      <input id="ae-bank" type="text" maxlength="20" value="${escapeHTML(acc.bank || '')}" placeholder="例如：華南銀行">
+    </div>
+    <div class="form-field">
+      <label>用途說明（可選）</label>
+      <input id="ae-purpose" type="text" maxlength="30" value="${escapeHTML(acc.purpose || '')}" placeholder="例如：大型支出基金">
+    </div>
+    <div class="form-field">
+      <label class="checkbox-row">
+        <input type="checkbox" id="ae-default" ${acc.isDefault ? 'checked' : ''}>
+        <span>設為預設帳戶（新增記錄時自動選中）</span>
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="ae-cancel">取消</button>
+      <button class="btn btn-primary" id="ae-save">儲存</button>
+    </div>
+  `;
+  const modal = openModal(html, { top: true });
+
+  modal.querySelector('#ae-cancel').addEventListener('click', () => {
+    closeModal();
+    if (onDone) onDone();
+  });
+
+  modal.querySelector('#ae-save').addEventListener('click', () => {
+    const name = modal.querySelector('#ae-name').value.trim();
+    const type = modal.querySelector('#ae-type').value;
+    const bank = modal.querySelector('#ae-bank').value.trim();
+    const purpose = modal.querySelector('#ae-purpose').value.trim();
+    const isDefault = modal.querySelector('#ae-default').checked;
+    if (!name) { toast('請輸入帳戶名稱'); return; }
+    if (state.accounts.some(a => a.id !== (isEdit ? id : null) && a.name === name)) {
+      toast('已有同名帳戶');
+      return;
+    }
+    let createdId = null;
+    if (isEdit) {
+      Object.assign(acc, { name, type, bank, purpose });
+      if (isDefault) ensureSingleDefault(id);
+      else if (acc.isDefault) acc.isDefault = false;
+    } else {
+      const newAcc = { id: genId('acc'), name, type, bank, purpose };
+      state.accounts.push(newAcc);
+      createdId = newAcc.id;
+      if (isDefault || state.accounts.length === 1) ensureSingleDefault(newAcc.id);
+    }
+    // 若沒有任何 default，補一個
+    if (!state.accounts.some(a => a.isDefault && !a.archived)) {
+      const next = getActiveAccounts()[0];
+      if (next) next.isDefault = true;
+    }
+    saveState();
+    closeModal();
+    toast(isEdit ? '已更新' : '已新增');
+    if (onDone) onDone(createdId);
+  });
+}
+
+/* ===================================================
+ * 排程管理 modal
+ * =================================================== */
+function describeScheduleFlow(s) {
+  if (s.type === 'transfer') {
+    const from = findAccount(s.fromAccount);
+    const to = findAccount(s.toAccount);
+    return `↔️ ${from?.name || '?'} → ${to?.name || '?'}`;
+  }
+  const cat = findCat(s.type, s.category);
+  const acc = findAccount(s.account);
+  const catText = cat ? `${cat.emoji} ${cat.name}` : '';
+  const subText = s.subcategory ? ` · ${s.subcategory}` : '';
+  const accText = acc ? ` @ ${acc.name}` : '';
+  return `${s.type === 'expense' ? '−' : '+'} ${catText}${subText}${accText}`;
+}
+
+function openScheduleManager() {
+  const items = state.schedules.map(s => `
+    <div class="schedule-list-item">
+      <div class="info">
+        <div class="name">
+          <span>${escapeHTML(s.name)}</span>
+          ${s.active ? '<span class="badge">啟用</span>' : '<span class="badge inactive">停用</span>'}
+        </div>
+        <div class="meta">
+          ${escapeHTML(describeScheduleFlow(s))}<br>
+          NT$ ${formatMoney(s.amount)} · 每月 ${s.dayOfMonth} 號 · 帳本：${escapeHTML(s.book)}<br>
+          下次到期：${s.nextDue || '—'}${s.lastExecuted ? ` · 上次：${s.lastExecuted}` : ''}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" data-edit-sched="${s.id}">編輯</button>
+        <button class="btn btn-ghost" data-toggle-sched="${s.id}">${s.active ? '停用' : '啟用'}</button>
+        <button class="btn btn-danger" data-del-sched="${s.id}">刪除</button>
+      </div>
+    </div>
+  `).join('');
+
+  const html = `
+    <div class="modal-title">定期扣款 / 排程</div>
+    ${items || '<div class="empty-state" style="padding:20px 10px;font-size:13px;line-height:1.7">尚未建立定期扣款<br>例如：每月 5 號從現金撥 15,000 到夢想帳戶</div>'}
+    <div class="modal-actions">
+      <button class="btn" id="sm-close">關閉</button>
+      <button class="btn btn-primary" id="sm-add">＋ 新增定期扣款</button>
+    </div>
+  `;
+  const modal = openModal(html);
+  modal.querySelector('#sm-close').addEventListener('click', closeModal);
+  modal.querySelector('#sm-add').addEventListener('click', () => {
+    openScheduleEditor(null, () => openScheduleManager());
+  });
+  modal.querySelectorAll('[data-edit-sched]').forEach(b => {
+    b.addEventListener('click', () => {
+      openScheduleEditor(b.dataset.editSched, () => openScheduleManager());
+    });
+  });
+  modal.querySelectorAll('[data-toggle-sched]').forEach(b => {
+    b.addEventListener('click', () => {
+      const s = state.schedules.find(x => x.id === b.dataset.toggleSched);
+      if (!s) return;
+      s.active = !s.active;
+      saveState();
+      openScheduleManager();
+    });
+  });
+  modal.querySelectorAll('[data-del-sched]').forEach(b => {
+    b.addEventListener('click', () => {
+      const id = b.dataset.delSched;
+      const s = state.schedules.find(x => x.id === id);
+      if (!s) return;
+      openConfirm(`刪除排程「${s.name}」？`, () => {
+        state.schedules = state.schedules.filter(x => x.id !== id);
+        saveState();
+        toast('已刪除');
+        openScheduleManager();
+      });
+    });
+  });
+}
+
+function openScheduleEditor(id, onDone, template) {
+  const isEdit = !!id;
+  const def = getDefaultAccount();
+  const baseDefault = {
+    name: '',
+    type: 'transfer',
+    fromAccount: def?.id || null,
+    toAccount: null,
+    account: def?.id || null,
+    category: null,
+    subcategory: null,
+    amount: 0,
+    dayOfMonth: new Date().getDate(),
+    book: state.currentBook,
+    note: '',
+    active: true
+  };
+  const s = isEdit
+    ? state.schedules.find(x => x.id === id)
+    : { ...baseDefault, ...(template || {}) };
+  if (isEdit && !s) return;
+
+  function renderBody(working) {
+    const active = getActiveAccounts();
+    const typeBtns = `
+      <div class="type-switch" style="margin:0">
+        <button class="${working.type === 'transfer' ? 'active transfer' : ''}" data-st-type="transfer">轉帳</button>
+        <button class="${working.type === 'expense' ? 'active expense' : ''}" data-st-type="expense">支出</button>
+        <button class="${working.type === 'income' ? 'active income' : ''}" data-st-type="income">收入</button>
+      </div>
+    `;
+
+    let typeFields = '';
+    if (working.type === 'transfer') {
+      const fromOptions = active.map(a => `<option value="${a.id}" ${a.id === working.fromAccount ? 'selected' : ''}>${getAccountIcon(a.type)} ${escapeHTML(a.name)}</option>`).join('');
+      const toOptions = active.map(a => `<option value="${a.id}" ${a.id === working.toAccount ? 'selected' : ''}>${getAccountIcon(a.type)} ${escapeHTML(a.name)}</option>`).join('');
+      const purposeOptions = `<option value="">（無）</option>` + TRANSFER_PURPOSES.map(p =>
+        `<option value="${escapeHTML(p)}" ${p === working.transferPurpose ? 'selected' : ''}>${escapeHTML(p)}</option>`
+      ).join('');
+      typeFields = `
+        <div class="form-field"><label>從帳戶</label><select id="se-from">${fromOptions}</select></div>
+        <div class="form-field"><label>到帳戶</label><select id="se-to">${toOptions}</select></div>
+        <div class="form-field"><label>目的</label><select id="se-purpose">${purposeOptions}</select></div>
+      `;
+    } else {
+      const cats = CATS[working.type];
+      const catId = working.category || cats[0].id;
+      const subs = getSubcategories(working.type, catId);
+      const catOptions = cats.map(c => `<option value="${c.id}" ${c.id === catId ? 'selected' : ''}>${c.emoji} ${escapeHTML(c.name)}</option>`).join('');
+      const subOptions = subs.length
+        ? `<option value="">（無）</option>` + subs.map(sb => `<option value="${escapeHTML(sb)}" ${sb === working.subcategory ? 'selected' : ''}>${escapeHTML(sb)}</option>`).join('')
+        : '';
+      const accOptions = active.map(a => `<option value="${a.id}" ${a.id === working.account ? 'selected' : ''}>${getAccountIcon(a.type)} ${escapeHTML(a.name)}</option>`).join('');
+      typeFields = `
+        <div class="form-field"><label>分類</label><select id="se-cat">${catOptions}</select></div>
+        <div class="form-field" id="se-sub-wrap" ${subs.length ? '' : 'style="display:none"'}><label>細項</label><select id="se-sub">${subOptions}</select></div>
+        <div class="form-field"><label>帳戶</label><select id="se-acc">${accOptions}</select></div>
+      `;
+    }
+
+    const bookOptions = state.books.map(b => `<option value="${escapeHTML(b)}" ${b === working.book ? 'selected' : ''}>${escapeHTML(b)}</option>`).join('');
+
+    return `
+      <div class="modal-title">${isEdit ? '編輯排程' : '新增排程'}</div>
+      <div class="form-field">
+        <label>名稱</label>
+        <input id="se-name" type="text" maxlength="30" value="${escapeHTML(working.name || '')}" placeholder="例如：每月撥華南儲蓄">
+      </div>
+      <div class="form-field">
+        <label>類型</label>
+        ${typeBtns}
+      </div>
+      ${typeFields}
+      <div class="form-field">
+        <label>金額</label>
+        <input id="se-amount" type="number" inputmode="numeric" min="1" max="9999999" value="${working.amount || ''}" placeholder="例如：15000">
+      </div>
+      <div class="form-field">
+        <label>每月幾號（1-31，超過該月最後一天時自動使用最後一天）</label>
+        <input id="se-day" type="number" inputmode="numeric" min="1" max="31" value="${working.dayOfMonth || 1}">
+      </div>
+      <div class="form-field">
+        <label>帳本</label>
+        <select id="se-book">${bookOptions}</select>
+      </div>
+      <div class="form-field">
+        <label>預設備註（可選）</label>
+        <input id="se-note" type="text" maxlength="${MAX_NOTE_LEN}" value="${escapeHTML(working.note || '')}" placeholder="例如：每月固定撥款">
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="se-cancel">取消</button>
+        <button class="btn btn-primary" id="se-save">儲存</button>
+      </div>
+    `;
+  }
+
+  function attach(modal, working) {
+    modal.innerHTML = renderBody(working);
+
+    function collect() {
+      const out = {
+        name: modal.querySelector('#se-name').value.trim(),
+        type: working.type,
+        amount: parseInt(modal.querySelector('#se-amount').value, 10) || 0,
+        dayOfMonth: Math.min(31, Math.max(1, parseInt(modal.querySelector('#se-day').value, 10) || 1)),
+        book: modal.querySelector('#se-book').value,
+        note: modal.querySelector('#se-note').value.slice(0, MAX_NOTE_LEN),
+        active: working.active !== false
+      };
+      if (working.type === 'transfer') {
+        out.fromAccount = modal.querySelector('#se-from').value;
+        out.toAccount = modal.querySelector('#se-to').value;
+        out.transferPurpose = modal.querySelector('#se-purpose').value || null;
+      } else {
+        out.account = modal.querySelector('#se-acc').value;
+        out.category = modal.querySelector('#se-cat').value;
+        out.subcategory = (modal.querySelector('#se-sub') && modal.querySelector('#se-sub').value) || null;
+      }
+      return out;
+    }
+
+    modal.querySelectorAll('[data-st-type]').forEach(b => {
+      b.addEventListener('click', () => {
+        const t = b.dataset.stType;
+        if (t === working.type) return;
+        const cur = collect();
+        // 保留 name, amount, dayOfMonth, book, note
+        const next = {
+          ...working,
+          name: cur.name,
+          amount: cur.amount,
+          dayOfMonth: cur.dayOfMonth,
+          book: cur.book,
+          note: cur.note,
+          type: t
+        };
+        const def = getDefaultAccount();
+        if (t === 'transfer') {
+          next.fromAccount = working.account || def?.id || null;
+          next.toAccount = null;
+          next.transferPurpose = null;
+          delete next.account;
+          delete next.category;
+          delete next.subcategory;
+        } else {
+          next.account = working.fromAccount || def?.id || null;
+          next.category = CATS[t][0].id;
+          next.subcategory = null;
+          delete next.fromAccount;
+          delete next.toAccount;
+          delete next.transferPurpose;
+        }
+        attach(modal, next);
+      });
+    });
+
+    // 切換大分類 → 重填細項
+    const catSel = modal.querySelector('#se-cat');
+    if (catSel) {
+      catSel.addEventListener('change', () => {
+        const newSubs = getSubcategories(working.type, catSel.value);
+        const wrap = modal.querySelector('#se-sub-wrap');
+        if (newSubs.length) {
+          wrap.style.display = '';
+          modal.querySelector('#se-sub').innerHTML = `<option value="">（無）</option>` + newSubs.map(s => `<option value="${escapeHTML(s)}">${escapeHTML(s)}</option>`).join('');
+        } else {
+          wrap.style.display = 'none';
+        }
+      });
+    }
+
+    modal.querySelector('#se-cancel').addEventListener('click', () => {
+      closeModal();
+      if (onDone) onDone();
+    });
+
+    modal.querySelector('#se-save').addEventListener('click', () => {
+      const cur = collect();
+      if (!cur.name) { toast('請輸入名稱'); return; }
+      if (!(cur.amount > 0) || cur.amount > 9999999) { toast('金額需為 1 到 9999999'); return; }
+      if (cur.dayOfMonth < 1 || cur.dayOfMonth > 31) { toast('日期需為 1-31'); return; }
+      if (cur.type === 'transfer') {
+        if (!cur.fromAccount || !cur.toAccount) { toast('請選擇從/到帳戶'); return; }
+        if (cur.fromAccount === cur.toAccount) { toast('從與到帳戶不可相同'); return; }
+      } else {
+        if (!cur.account) { toast('請選擇帳戶'); return; }
+        if (!cur.category) { toast('請選擇分類'); return; }
+      }
+
+      if (isEdit) {
+        // 保留 lastExecuted；若 dayOfMonth 改了重新計算 nextDue
+        const dayChanged = (cur.dayOfMonth !== s.dayOfMonth);
+        Object.assign(s, cur);
+        if (dayChanged || !s.nextDue) {
+          s.nextDue = computeInitialNextDue(cur.dayOfMonth, s.lastExecuted ? advanceNextDue(s.lastExecuted, cur.dayOfMonth) : null);
+        }
+      } else {
+        const newSched = {
+          id: genId('sch'),
+          ...cur,
+          lastExecuted: null,
+          nextDue: computeInitialNextDue(cur.dayOfMonth, null)
+        };
+        state.schedules.push(newSched);
+      }
+      saveState();
+      closeModal();
+      toast(isEdit ? '已更新' : '已建立');
+      if (onDone) onDone();
+    });
+  }
+
+  const modal = openModal('', { top: true });
+  attach(modal, { ...s });
+}
+
+/* ===================================================
+ * 排程到期 modal
+ * =================================================== */
+function openScheduleDueModal(sched) {
+  const flow = describeScheduleFlow(sched);
+  const html = `
+    <div class="modal-title">⏰ 定期排程到期</div>
+    <div style="text-align:center;line-height:1.7;color:var(--ink-soft);font-size:14px;margin-bottom:10px">
+      <div style="font-weight:600;color:var(--ink);font-size:15px;margin-bottom:6px">${escapeHTML(sched.name)}</div>
+      <div>${escapeHTML(flow)}</div>
+      <div style="font-size:18px;color:var(--ink);margin:6px 0;font-variant-numeric:tabular-nums">NT$ ${formatMoney(sched.amount)}</div>
+      <div>日期：${sched.nextDue}</div>
+      <div>帳本：${escapeHTML(sched.book)}</div>
+      ${sched.note ? `<div>備註：${escapeHTML(sched.note)}</div>` : ''}
+    </div>
+    <div style="text-align:center;color:var(--ink);font-size:14px;margin-bottom:8px">要建立這筆紀錄嗎？</div>
+    <div class="modal-actions">
+      <button class="btn" id="sd-skip">跳過本月</button>
+      <button class="btn" id="sd-edit">編輯</button>
+      <button class="btn btn-primary" id="sd-confirm">確認建立</button>
+    </div>
+  `;
+  const modal = openModal(html, { top: true, lockBackdrop: true });
+
+  modal.querySelector('#sd-confirm').addEventListener('click', () => {
+    executeSchedule(sched, null);
+    closeModal();
+    setTimeout(checkScheduleDue, 50);
+  });
+
+  modal.querySelector('#sd-skip').addEventListener('click', () => {
+    sched.nextDue = advanceNextDue(sched.nextDue, sched.dayOfMonth);
+    saveState();
+    toast(`已跳過「${sched.name}」本月`);
+    closeModal();
+    setTimeout(checkScheduleDue, 50);
+  });
+
+  modal.querySelector('#sd-edit').addEventListener('click', () => {
+    closeModal();
+    openScheduleDueEditModal(sched);
+  });
+}
+
+function openScheduleDueEditModal(sched) {
+  const html = `
+    <div class="modal-title">調整本月紀錄</div>
+    <div class="form-field">
+      <label>金額</label>
+      <input id="sde-amount" type="number" inputmode="numeric" min="1" max="9999999" value="${sched.amount}">
+    </div>
+    <div class="form-field">
+      <label>日期</label>
+      <input id="sde-date" type="date" value="${sched.nextDue}">
+    </div>
+    <div class="form-field">
+      <label>備註</label>
+      <input id="sde-note" type="text" maxlength="${MAX_NOTE_LEN}" value="${escapeHTML(sched.note || '')}">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="sde-cancel">取消</button>
+      <button class="btn btn-primary" id="sde-save">確認建立</button>
+    </div>
+  `;
+  const modal = openModal(html, { top: true, lockBackdrop: true });
+
+  modal.querySelector('#sde-cancel').addEventListener('click', () => {
+    closeModal();
+    openScheduleDueModal(sched);
+  });
+
+  modal.querySelector('#sde-save').addEventListener('click', () => {
+    const amt = parseInt(modal.querySelector('#sde-amount').value, 10) || 0;
+    const date = modal.querySelector('#sde-date').value || sched.nextDue;
+    const note = modal.querySelector('#sde-note').value.slice(0, MAX_NOTE_LEN);
+    if (!(amt > 0) || amt > 9999999) { toast('金額需為 1 到 9999999'); return; }
+    executeSchedule(sched, { amount: amt, date, note });
+    closeModal();
+    setTimeout(checkScheduleDue, 50);
+  });
+}
+
+function executeSchedule(sched, overrides) {
+  const amount = (overrides && overrides.amount) || sched.amount;
+  const date = (overrides && overrides.date) || sched.nextDue || todayISO();
+  const note = (overrides && overrides.note != null) ? overrides.note : (sched.note || '');
+  const targetBook = state.books.includes(sched.book) ? sched.book : state.currentBook;
+
+  let entry;
+  if (sched.type === 'transfer') {
+    entry = {
+      id: genId(),
+      type: 'transfer',
+      amount,
+      fromAccount: sched.fromAccount,
+      toAccount: sched.toAccount,
+      transferPurpose: sched.transferPurpose || null,
+      note,
+      date,
+      createdAt: Date.now(),
+      scheduleId: sched.id
+    };
+  } else {
+    entry = {
+      id: genId(),
+      type: sched.type,
+      amount,
+      category: sched.category,
+      subcategory: sched.subcategory || null,
+      account: sched.account,
+      note,
+      date,
+      createdAt: Date.now(),
+      scheduleId: sched.id
+    };
+  }
+
+  if (!state.entries[targetBook]) state.entries[targetBook] = [];
+  state.entries[targetBook].push(entry);
+
+  sched.lastExecuted = todayISO();
+  sched.nextDue = advanceNextDue(sched.nextDue || todayISO(), sched.dayOfMonth);
+
+  saveState();
+  syncDispatch('append', toCloudPayload(entry, targetBook));
+  toast(`已建立「${sched.name}」`);
+  renderMain();
+}
+
+/* ===================================================
+ * CSV 匯出
+ * =================================================== */
+function csvEscape(s) {
+  s = String(s == null ? '' : s);
+  if (/[",\r\n]/.test(s)) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function entryToCSVRow(e, book) {
+  const { weekday } = isoToParts(e.date);
+  if (e.type === 'transfer') {
+    const from = findAccount(e.fromAccount);
+    const to = findAccount(e.toAccount);
+    const noteParts = [];
+    if (e.transferPurpose) noteParts.push(`(${e.transferPurpose})`);
+    if (e.note) noteParts.push(e.note);
+    return [
+      e.date,
+      weekday,
+      '',
+      '',
+      noteParts.join(' '),
+      '轉帳',
+      e.amount,
+      book,
+      '',
+      from ? from.name : (e.fromAccount || ''),
+      to ? to.name : (e.toAccount || ''),
+      e.scheduleId || ''
+    ].map(csvEscape).join(',');
+  }
+  const cat = findCat(e.type, e.category);
+  const catName = cat?.name || e.category || '';
+  const typeText = e.type === 'expense' ? '支出' : '收入';
+  const acc = findAccount(e.account);
+  return [
+    e.date,
+    weekday,
+    catName,
+    e.subcategory || '',
+    e.note || '',
+    typeText,
+    e.amount,
+    book,
+    acc ? acc.name : (e.account || ''),
+    '',
+    '',
+    e.scheduleId || ''
+  ].map(csvEscape).join(',');
+}
+
+function exportCSV(scope) {
+  const book = state.currentBook;
+  const all = state.entries[book] || [];
+  const list = (scope === 'month')
+    ? all.filter(e => e.date && e.date.startsWith(state.ui.viewMonth))
+    : all;
+  if (!list.length) {
+    toast('沒有資料可匯出');
+    return;
+  }
+  const header = '日期,星期,類別,細項,備註,收支,金額,帳本,帳戶,從帳戶,到帳戶,排程ID';
+  const rows = list
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
+    .map(e => entryToCSVRow(e, book));
+  const csv = header + '\r\n' + rows.join('\r\n') + '\r\n';
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const fname = (scope === 'month')
+    ? `記帳_${book}_${state.ui.viewMonth}.csv`
+    : `記帳_${book}_全部.csv`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+  toast(`已匯出 ${list.length} 筆`);
+}
+
+/* ===================================================
+ * CSV 匯入（v1.0 8 欄 / v1.1 12 欄 皆相容）
+ * =================================================== */
+function handleImportFile(ev) {
+  const file = ev.target.files?.[0];
+  ev.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const text = String(reader.result || '').replace(/^﻿/, '');
+      parseAndConfirmCSV(text);
+    } catch (err) {
+      console.error(err);
+      toast('匯入失敗');
+    }
+  };
+  reader.onerror = () => toast('讀取檔案失敗');
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { cell += '"'; i++; }
+        else inQuote = false;
+      } else {
+        cell += ch;
+      }
+    } else {
+      if (ch === '"') inQuote = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+      else if (ch === '\r') { /* skip */ }
+      else cell += ch;
+    }
+  }
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows.filter(r => r.some(c => c.length > 0));
+}
+
+function parseAndConfirmCSV(text) {
+  const rows = parseCSV(text);
+  if (rows.length < 2) { toast('CSV 沒有資料'); return; }
+  const header = rows[0].map(h => h.trim());
+
+  const required = ['日期','類別','收支','金額'];
+  for (const r of required) {
+    if (header.indexOf(r) < 0) { toast(`CSV 缺少必要欄位：${r}`); return; }
+  }
+  const colIdx = {};
+  ['日期','星期','類別','細項','備註','收支','金額','帳本','帳戶','從帳戶','到帳戶','排程ID'].forEach(name => {
+    colIdx[name] = header.indexOf(name);
+  });
+
+  const def = getDefaultAccount();
+  const defId = def ? def.id : 'acc_cash';
+
+  const parsed = [];
+  const skipped = [];
+  let warnings = 0;
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const get = (name) => colIdx[name] >= 0 ? (r[colIdx[name]] || '').trim() : '';
+    const date = get('日期');
+    const catName = get('類別');
+    const subVal = get('細項');
+    const note = get('備註');
+    const typeText = get('收支');
+    const amountText = get('金額');
+    const accName = get('帳戶');
+    const fromName = get('從帳戶');
+    const toName = get('到帳戶');
+    const schedId = get('排程ID');
+    const amount = parseInt(amountText.replace(/[^\d-]/g, ''), 10);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { skipped.push({ row: i, reason: '日期格式錯' }); continue; }
+    if (!(amount > 0) || amount > 9999999) { skipped.push({ row: i, reason: '金額無效' }); continue; }
+
+    let type;
+    if (typeText === '轉帳') type = 'transfer';
+    else if (typeText === '收入') type = 'income';
+    else if (typeText === '支出') type = 'expense';
+    else { skipped.push({ row: i, reason: '收支欄錯' }); continue; }
+
+    if (type === 'transfer') {
+      let fromId = null, toId = null;
+      if (fromName) {
+        const a = findAccountByName(fromName);
+        if (a) fromId = a.id; else { fromId = defId; warnings++; }
+      } else { fromId = defId; }
+      if (toName) {
+        const a = findAccountByName(toName);
+        if (a) toId = a.id; else { toId = defId; warnings++; }
+      } else { toId = defId; }
+      if (!fromId || !toId || fromId === toId) {
+        skipped.push({ row: i, reason: '轉帳的從/到帳戶無法決定' });
+        continue;
+      }
+      parsed.push({
+        id: genId(),
+        type: 'transfer',
+        amount,
+        fromAccount: fromId,
+        toAccount: toId,
+        transferPurpose: null,
+        note: note.slice(0, MAX_NOTE_LEN),
+        date,
+        createdAt: Date.now() + i,
+        scheduleId: schedId || undefined
+      });
+      continue;
+    }
+
+    // 支出 / 收入
+    let cat = findCatByName(type, catName);
+    if (!cat) {
+      cat = findCat(type, type === 'expense' ? 'other' : 'other_in');
+      warnings++;
+    }
+    let accountId = null;
+    if (accName) {
+      const a = findAccountByName(accName);
+      if (a) accountId = a.id; else { accountId = defId; warnings++; }
+    } else {
+      accountId = defId;
+    }
+
+    parsed.push({
+      id: genId(),
+      type,
+      amount,
+      category: cat.id,
+      subcategory: subVal || null,
+      account: accountId,
+      note: note.slice(0, MAX_NOTE_LEN),
+      date,
+      createdAt: Date.now() + i,
+      scheduleId: schedId || undefined
+    });
+  }
+
+  if (!parsed.length) {
+    toast(`無有效資料可匯入（${skipped.length} 列被跳過）`);
+    return;
+  }
+
+  openConfirm(`將匯入 ${parsed.length} 筆到「${state.currentBook}」，繼續嗎？`, () => {
+    state.entries[state.currentBook].push(...parsed);
+    saveState();
+    renderMain();
+    let msg = `成功匯入 ${parsed.length} 筆`;
+    if (warnings) msg += `（其中 ${warnings} 筆有警告）`;
+    if (skipped.length) msg += `，跳過 ${skipped.length} 筆`;
+    toast(msg);
+  });
+}
+
+/* ===================================================
+ * 清空帳本（二次確認，需打字「刪除」）
+ * =================================================== */
+function confirmClearBook() {
+  const book = state.currentBook;
+  const cnt = (state.entries[book] || []).length;
+  if (!cnt) { toast('當前帳本沒有資料'); return; }
+
+  const html = `
+    <div class="modal-title">清空「${escapeHTML(book)}」？</div>
+    <div style="color:var(--ink-soft);font-size:13px;text-align:center;line-height:1.7;margin-bottom:10px">
+      將刪除 ${cnt} 筆資料，無法復原。<br>
+      請輸入「<strong style="color:var(--expense)">刪除</strong>」二字確認。
+    </div>
+    <input id="clear-input" type="text" placeholder="輸入「刪除」" style="width:100%;text-align:center;font-size:15px">
+    <div class="modal-actions">
+      <button class="btn" id="clear-cancel">取消</button>
+      <button class="btn btn-danger" id="clear-yes" disabled>確認清空</button>
+    </div>
+  `;
+  const modal = openModal(html, { top: true });
+  const input = modal.querySelector('#clear-input');
+  const yes = modal.querySelector('#clear-yes');
+  input.addEventListener('input', () => {
+    yes.disabled = (input.value.trim() !== '刪除');
+  });
+  modal.querySelector('#clear-cancel').addEventListener('click', closeModal);
+  yes.addEventListener('click', () => {
+    state.entries[book] = [];
+    saveState();
+    closeModal();
+    renderMain();
+    toast('已清空');
+  });
+  setTimeout(() => input.focus(), 100);
+}
+
+/* ===================================================
+ * 啟動
+ * =================================================== */
+function init() {
+  loadState();
+  loadSyncState();
+  renderHeader();
+  renderTabbar();
+  renderMain();
+  // 排程到期檢查
+  setTimeout(checkScheduleDue, 50);
+
+  // 上線後嘗試送 queue
+  window.addEventListener('online', () => {
+    updateSyncBadge();
+    flushQueue();
+  });
+  window.addEventListener('offline', updateSyncBadge);
+
+  // 每 60 秒嘗試 flush；前景切回也嘗試
+  setInterval(() => {
+    if (navigator.onLine && state.sync.pendingQueue.length > 0) flushQueue();
+  }, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && navigator.onLine) flushQueue();
+  });
+
+  // 啟動先 flush 一次（可能上次離線留下的 queue）
+  setTimeout(() => { if (navigator.onLine) flushQueue(); }, 1500);
+
+  // Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js').catch(console.warn);
+    });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
