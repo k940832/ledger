@@ -1674,7 +1674,10 @@ function renderTabbar() {
 
 /* ===================================================
  * Main router
+ * 注意：只有「切換 tab」才回捲到頂端；同一個 tab 內的重渲染（按數字鍵盤、
+ *      點分類等）保留當前 scroll 位置，避免每按一鍵畫面就跳上去。
  * =================================================== */
+let _lastRenderedTab = null;
 function renderMain() {
   const main = document.getElementById('main');
   switch (state.ui.tab) {
@@ -1683,7 +1686,10 @@ function renderMain() {
     case 'stats':    main.innerHTML = renderStatsHTML();    bindStatsEvents();    break;
     case 'settings': main.innerHTML = renderSettingsHTML(); bindSettingsEvents(); break;
   }
-  window.scrollTo(0, 0);
+  if (_lastRenderedTab !== state.ui.tab) {
+    window.scrollTo(0, 0);
+    _lastRenderedTab = state.ui.tab;
+  }
 }
 
 /* ===================================================
