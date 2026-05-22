@@ -6,7 +6,7 @@
  *  - 換版本時 activate 階段清掉舊 cache
  */
 
-const CACHE_NAME = 'ledger-v1.2.2';
+const CACHE_NAME = 'ledger-v1.3.0';
 const ASSETS = [
   './',
   './index.html',
