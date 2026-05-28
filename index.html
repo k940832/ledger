@@ -936,6 +936,7 @@ const CATS = {
     { id: 'house',     name: '房屋', emoji: '🏘️', subs: null },
     { id: 'family',    name: '孝親', emoji: '👨‍👩‍👧', subs: null },
     { id: 'tax',       name: '稅金', emoji: '💸', subs: ['所得稅','房屋稅','地價稅','牌照','燃料'] },
+    { id: 'lend',      name: '代墊支出', emoji: '🤲', subs: ['爸爸','媽媽','公司','其他'] },
     { id: 'other',     name: '其他', emoji: '➕', subs: null }
   ],
   income: [
@@ -946,6 +947,7 @@ const CATS = {
     { id: 'subsidy',   name: '補助',   emoji: '🏛️', subs: ['政府','空軍官校','其他'] },
     { id: 'invest_in', name: '投資收入', emoji: '📈', subs: ['股息','利息','資本利得'] },
     { id: 'refund',    name: '退稅',   emoji: '💵', subs: null },
+    { id: 'lend_back', name: '代墊回歸', emoji: '🪙', subs: ['爸爸','媽媽','公司','其他'] },
     { id: 'other_in',  name: '其他',   emoji: '➕', subs: null }
   ]
 };
@@ -975,7 +977,7 @@ const WEEKDAY_TC = ['日','一','二','三','四','五','六'];
  * =================================================== */
 const STORAGE_KEY = 'ledger_v1';
 const STORAGE_KEY_SYNC = 'ledger_sync_v1';
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const MAX_QUEUE_TRIES = 5;
 const MAX_NOTE_LEN = 50;
 const MAX_AMOUNT_DIGITS = 7;
@@ -3155,6 +3157,15 @@ function renderSettingsHTML() {
           <div class="desc">刪除「${escapeHTML(state.currentBook)}」所有資料</div>
         </div>
         <button class="btn btn-danger" id="btn-clear">清空</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📊 雲端報表</h3>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <a href="https://docs.google.com/spreadsheets/d/13AC48kjkEmEc7RqmWOvpsf3Q8mXjOxqaZg-SLUY8sMg/edit?gid=992147842" target="_blank" class="btn" style="text-decoration:none;text-align:center">🤝 應收帳款專區（誰欠你）</a>
+        <a href="https://docs.google.com/spreadsheets/d/13AC48kjkEmEc7RqmWOvpsf3Q8mXjOxqaZg-SLUY8sMg/edit?gid=958743941" target="_blank" class="btn" style="text-decoration:none;text-align:center">💎 夢想帳戶儲蓄專區</a>
+        <a href="https://docs.google.com/spreadsheets/d/1fZI4AsuaTZH4rPUGup7EL6ygtzyo39KJyjtLUBzsIu8/edit" target="_blank" class="btn" style="text-decoration:none;text-align:center">📈 總覽儀表板（淨資產）</a>
       </div>
     </div>
 
