@@ -1,6 +1,6 @@
-# 記帳本 PWA v1.2 — 雲端同步版
+# 記帳本 PWA v1.6 — Google Sheets 雙向同步版
 
-Phase 3 成品：在 Phase 1 v1.1 純本地 PWA 之上加雲端同步，部署到 Cloudflare Pages 後可在 iPhone 主畫面以全螢幕 App 使用。
+家庭記帳 PWA。資料先保存在裝置，並透過 Apps Script 與 Google Sheets 安全雙向合併。
 
 ---
 
@@ -9,6 +9,7 @@ Phase 3 成品：在 Phase 1 v1.1 純本地 PWA 之上加雲端同步，部署�
 ```
 Phase3_PWA雲端同步/
 ├── index.html          # PWA 主檔（含雲端同步邏輯）
+├── sync-core.js        # 依交易 ID 安全合併的純函式
 ├── service-worker.js   # 離線快取
 ├── manifest.json       # PWA 安裝資訊
 ├── icon-192.png        # 主畫面圖示
@@ -26,11 +27,12 @@ Phase3_PWA雲端同步/
 |---|---|
 | **☁️ 雲端同步設定** | 設定頁最上方，填 Web App URL + Secret 啟用 |
 | **連線測試** | 即時確認 URL/Secret 是否正確 |
-| **自動同步** | 每次新增/編輯/刪除自動 POST 到 Apps Script |
+| **安全雙向同步** | 先送出本機待同步，再拉回 Sheets，依交易 ID 合併 |
+| **自動同步** | 新增/編輯/刪除立即上傳；啟動、回到前景及每 5 分鐘自動拉回 |
 | **離線重試** | 沒網路時進 queue，連網後自動補送 |
 | **同步狀態 badge** | Header 旁邊圖示顯示狀態 ✓/⟳/⚠/⊘/✕ |
 | **全部上傳** | 一鍵把本機所有紀錄推到雲端（首次設定用） |
-| **從雲端還原** | 換手機/重灌用，清空本機後拉回 |
+| **災難復原** | 換手機/重灌用，確認後才清空本機再拉回 |
 | **失敗紀錄** | 5 次重試後進 failed 清單，可檢視原因 |
 | **Service Worker** | 離線可開啟介面、刷新不掉資料 |
 | **iOS PWA** | 加到主畫面後全螢幕、無 Safari 網址列 |
@@ -68,13 +70,17 @@ enqueue → 寫 state.sync.pendingQueue
 shift queue，繼續下一筆
    ↓ ok=false 或 throw
 重試最多 5 次，否則進 failed 列表
+   ↓
+getEntries 拉回 Google Sheets 全部資料
+   ↓
+依交易 ID 合併：同 ID 以雲端為準、本機獨有保留、待送/失敗 ID 不覆寫
 ```
 
-觸發 flush 的時機：
+觸發上傳與拉回的時機：
 - 寫資料當下（如果 online）
 - 上線 event (`online`)
-- 切回前景 (`visibilitychange`)
-- 每 60 秒自動 tick
+- 切回前景 (`visibilitychange`) 時拉回
+- 每 60 秒補送 queue；每 5 分鐘拉回
 
 ---
 
@@ -90,7 +96,7 @@ PWA 內部用英文 ID（`food`、`acc_cash`），Sheets 顯示中文（`飲食`
 | `category: 'food'` | 類別 = `飲食` |
 | `account: 'acc_cash'` | 帳戶 = `現金` |
 
-**從雲端還原時**：
+**從雲端拉回時**：
 - 類別中文找不到對應 ID → 自動放「其他」分類
 - 帳戶名找不到 → 自動建立同名 cash 類型帳戶
 
@@ -108,10 +114,10 @@ PWA 內部用英文 ID（`food`、`acc_cash`），Sheets 顯示中文（`飲食`
 
 ---
 
-## v1.1 → v1.2 兼容
+## 舊版相容
 
 舊版 localStorage `ledger_v1` 完全沿用，沒同步設定就是純本地模式（跟 v1.1 行為一致）。
-打開 v1.2 第一次：
+打開 v1.6 第一次：
 - 主資料不變
 - `ledger_sync_v1` 不存在 → 同步 badge 隱藏
 - 想啟用雲端：去設定頁填 URL/Secret 即可
@@ -123,6 +129,7 @@ PWA 內部用英文 ID（`food`、`acc_cash`），Sheets 顯示中文（`飲食`
 | 限制 | 解決方式 |
 |---|---|
 | 兩台裝置同時改同一筆 | 最後寫入優先（雲端的）。Phase 4 之後再考慮版本欄位 |
+| 直接在 Sheets 刪除整列 | 後端沒有刪除墓碑，PWA 本機獨有資料會保留；請從 PWA 刪除交易 |
 | Apps Script 配額（每天 90 分鐘） | 一般家用不會用滿；超過會 fail → 隔天恢復 |
 | Cloudflare 免費方案請求數 | 每日 100K req，PWA 自己用根本不夠看 |
 | 雲端找不到的類別/帳戶 | 還原時自動建立，可能造成多餘類別 |

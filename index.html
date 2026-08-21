@@ -911,6 +911,7 @@
 <div id="modal-root"></div>
 <div id="toast-root"></div>
 
+<script src="./sync-core.js"></script>
 <script>
 'use strict';
 
@@ -977,10 +978,12 @@ const WEEKDAY_TC = ['日','一','二','三','四','五','六'];
  * =================================================== */
 const STORAGE_KEY = 'ledger_v1';
 const STORAGE_KEY_SYNC = 'ledger_sync_v1';
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.6';
 const MAX_QUEUE_TRIES = 5;
 const MAX_NOTE_LEN = 50;
 const MAX_AMOUNT_DIGITS = 7;
+const AUTO_PULL_INTERVAL_MS = 5 * 60 * 1000;
+const MIN_PULL_GAP_MS = 60 * 1000;
 
 const state = {
   books: ['我自己', '媽媽'],
@@ -997,10 +1000,13 @@ const state = {
     apiSecret: '',
     enabled: false,
     lastSyncedAt: 0,
+    lastPulledAt: 0,
+    lastPullSummary: null,
     lastError: null,
     pendingQueue: [],   // [{op, payload, tries, queuedAt}]
     failed: [],         // [{op, payload, _error}]
     _flushing: false,
+    _pulling: false,
     _pinging: false,
     _online: typeof navigator !== 'undefined' ? navigator.onLine : true,
     _badge: 'off'       // off | ok | syncing | pending | offline | error
@@ -1146,6 +1152,8 @@ function loadSyncState() {
     state.sync.apiSecret    = typeof data.apiSecret === 'string' ? data.apiSecret : '';
     state.sync.enabled      = !!data.enabled;
     state.sync.lastSyncedAt = Number(data.lastSyncedAt) || 0;
+    state.sync.lastPulledAt = Number(data.lastPulledAt) || 0;
+    state.sync.lastPullSummary = data.lastPullSummary || null;
     state.sync.lastError    = data.lastError || null;
     state.sync.pendingQueue = Array.isArray(data.pendingQueue) ? data.pendingQueue : [];
     state.sync.failed       = Array.isArray(data.failed) ? data.failed : [];
@@ -1161,6 +1169,8 @@ function saveSyncState() {
       apiSecret: state.sync.apiSecret,
       enabled: state.sync.enabled,
       lastSyncedAt: state.sync.lastSyncedAt,
+      lastPulledAt: state.sync.lastPulledAt,
+      lastPullSummary: state.sync.lastPullSummary,
       lastError: state.sync.lastError,
       pendingQueue: state.sync.pendingQueue,
       failed: state.sync.failed
@@ -1211,6 +1221,7 @@ function toCloudPayload(entry, book) {
     book: book || state.currentBook,
     note: entry.note || '',
     createdAt: entry.createdAt || Date.now(),
+    updatedAt: entry.updatedAt || entry.createdAt || Date.now(),
     scheduleId: entry.scheduleId || ''
   };
   if (entry.type === 'transfer') {
@@ -1309,6 +1320,139 @@ async function flushQueue() {
     }
   } finally {
     state.sync._flushing = false;
+    updateSyncBadge();
+  }
+}
+
+async function fetchRemoteEntries() {
+  const res = await fetch(state.sync.endpointUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      secret: state.sync.apiSecret,
+      action: 'getEntries',
+      payload: {}
+    }),
+    redirect: 'follow'
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  if (!(data && data.ok)) throw new Error((data && data.error) || '雲端拉取失敗');
+  return (data.data && data.data.entries) || [];
+}
+
+function protectedSyncIds() {
+  const ids = new Set();
+  for (const item of [...state.sync.pendingQueue, ...state.sync.failed]) {
+    const id = item && item.payload && item.payload.id;
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+function ensureCloudAccount(name, counters) {
+  if (!name) return null;
+  const existing = findAccountByName(name);
+  if (existing) return existing.id;
+  const newAcc = { id: genId('acc'), name, type: 'cash' };
+  state.accounts.push(newAcc);
+  counters.newAccounts++;
+  return newAcc.id;
+}
+
+function cloudRowToLocal(row, counters) {
+  const type = chineseToType(row.type);
+  if (!type || !row.id || !row.date) return null;
+  const book = row.book || state.currentBook;
+  if (!state.books.includes(book)) {
+    state.books.push(book);
+    state.entries[book] = state.entries[book] || [];
+    counters.newBooks++;
+  }
+  const e = {
+    id: row.id,
+    type,
+    amount: Number(row.amount) || 0,
+    date: row.date,
+    note: row.note || '',
+    createdAt: Number(row.createdAt) || 0,
+    updatedAt: Number(row.updatedAt) || Number(row.createdAt) || 0,
+    scheduleId: row.scheduleId || undefined
+  };
+  if (type === 'transfer') {
+    e.fromAccount = ensureCloudAccount(row.fromAccount, counters);
+    e.toAccount = ensureCloudAccount(row.toAccount, counters);
+  } else {
+    const catId = catNameToId(type, row.category);
+    e.category = catId || (type === 'expense' ? 'other' : 'other_in');
+    e.subcategory = row.subcategory || null;
+    e.account = ensureCloudAccount(row.account, counters);
+  }
+  return { book, entry: e };
+}
+
+function ensureDefaultAccount() {
+  if (!state.accounts.some(a => a.isDefault && !a.archived)) {
+    const first = getActiveAccounts()[0];
+    if (first) first.isDefault = true;
+  }
+}
+
+function mergeRemoteEntries(entries) {
+  if (!window.LedgerSyncCore) throw new Error('同步模組未載入');
+  const counters = { newAccounts: 0, newBooks: 0 };
+  const remoteItems = [];
+  for (const row of entries) {
+    const item = cloudRowToLocal(row, counters);
+    if (item) remoteItems.push(item);
+  }
+  const result = window.LedgerSyncCore.mergeEntries(
+    state.entries,
+    remoteItems,
+    protectedSyncIds()
+  );
+  state.entries = result.entriesByBook;
+  for (const book of state.books) state.entries[book] = state.entries[book] || [];
+  ensureDefaultAccount();
+  saveState();
+  return { ...result, ...counters, remoteTotal: entries.length };
+}
+
+async function syncNow({ showToast = false, force = false } = {}) {
+  if (!syncEnabled() || !navigator.onLine || state.sync._pulling || state.sync._flushing) return null;
+  if (!force && Date.now() - state.sync.lastPulledAt < MIN_PULL_GAP_MS) return null;
+
+  if (showToast) toast('雙向同步中…');
+  await flushQueue();
+  if (state.sync.pendingQueue.length > 0) {
+    if (showToast) toast('尚有資料未上傳，稍後再拉取');
+    return null;
+  }
+
+  state.sync._pulling = true;
+  updateSyncBadge();
+  try {
+    const entries = await fetchRemoteEntries();
+    const summary = mergeRemoteEntries(entries);
+    const now = Date.now();
+    state.sync.lastPulledAt = now;
+    state.sync.lastSyncedAt = now;
+    state.sync.lastPullSummary = summary;
+    if (state.sync.failed.length === 0) state.sync.lastError = null;
+    saveSyncState();
+    renderHeader();
+    renderMain();
+    if (showToast) {
+      toast(`✅ 同步完成：新增 ${summary.added}、更新 ${summary.updated}、保留本機 ${summary.protected}`);
+    }
+    return summary;
+  } catch (err) {
+    state.sync.lastError = err.message || '同步失敗';
+    saveSyncState();
+    if (showToast) toast('❌ 同步失敗：' + state.sync.lastError);
+    return null;
+  } finally {
+    state.sync._pulling = false;
     updateSyncBadge();
   }
 }
@@ -1636,7 +1780,7 @@ function computeSyncBadge() {
   if (!navigator.onLine) {
     return { cls: 'offline', icon: '⊘', title: '離線中' };
   }
-  if (state.sync._flushing) {
+  if (state.sync._flushing || state.sync._pulling) {
     return { cls: 'syncing', icon: '⟳', title: '同步中…' };
   }
   if (state.sync.pendingQueue.length > 0) {
@@ -1668,7 +1812,7 @@ function syncStatusLineHTML() {
     icon = '🔘'; color = 'var(--ink-faint)'; text = '尚未設定（填入下方 URL 與 Secret）';
   } else if (!navigator.onLine) {
     icon = '⊘'; color = 'var(--ink-faint)'; text = '目前離線，恢復連線後自動補送';
-  } else if (state.sync._flushing) {
+  } else if (state.sync._flushing || state.sync._pulling) {
     icon = '⟳'; color = 'var(--accent)'; text = '同步中…';
   } else if (state.sync.pendingQueue.length > 0) {
     icon = '⚠'; color = '#856404'; text = `待同步 ${state.sync.pendingQueue.length} 筆`;
@@ -2259,7 +2403,8 @@ function saveEntry() {
       transferPurpose: d.transferPurpose || null,
       note: (d.note || '').slice(0, MAX_NOTE_LEN),
       date: d.date,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
   } else {
     if (!d.category || !d.account) return;
@@ -2272,7 +2417,8 @@ function saveEntry() {
       account: d.account,
       note: (d.note || '').slice(0, MAX_NOTE_LEN),
       date: d.date,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
   }
 
@@ -2638,6 +2784,7 @@ function openEntryEditor(id, workingOverride) {
       delete original.toAccount;
       delete original.transferPurpose;
     }
+    original.updatedAt = Date.now();
     saveState();
     syncDispatch('update', toCloudPayload(original, found.book));
     closeModal();
@@ -3070,6 +3217,13 @@ function renderSettingsHTML() {
       </div>
       <div class="setting-row">
         <div class="setting-label">
+          <div class="title">安全雙向同步</div>
+          <div class="desc">先送出本機待同步，再從 Sheets 拉回並依交易 ID 合併；本機獨有資料會保留</div>
+        </div>
+        <button class="btn btn-primary" id="btn-sync-now" ${syncEnabled() ? '' : 'disabled'}>立即雙向同步</button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">
           <div class="title">全部上傳到雲端</div>
           <div class="desc">把本機所有紀錄推到 Sheets（初次設定或大量補登用）</div>
         </div>
@@ -3077,8 +3231,8 @@ function renderSettingsHTML() {
       </div>
       <div class="setting-row">
         <div class="setting-label">
-          <div class="title">從雲端還原</div>
-          <div class="desc">清空本機後從 Sheets 拉回（換手機或重灌用）</div>
+          <div class="title">災難復原（覆寫本機）</div>
+          <div class="desc">清空本機後從 Sheets 拉回；只在換手機或資料損壞時使用</div>
         </div>
         <button class="btn btn-danger" id="btn-sync-restore" ${syncEnabled() ? '' : 'disabled'}>還原</button>
       </div>
@@ -3173,7 +3327,7 @@ function renderSettingsHTML() {
       <h3>關於</h3>
       <div style="font-size:13px;color:var(--ink-soft);line-height:1.7">
         記帳本 v${APP_VERSION}<br>
-        純本地儲存 · 完全離線 · 含轉帳/帳戶/排程<br>
+        本機優先 · Google Sheets 雙向同步 · 含轉帳/帳戶/排程<br>
         資料儲存於瀏覽器 localStorage（key: <code>${STORAGE_KEY}</code>）
       </div>
     </div>
@@ -3197,6 +3351,8 @@ function bindSettingsEvents() {
   document.getElementById('btn-sync-save').addEventListener('click', onClickSyncSave);
   const flushBtn = document.getElementById('btn-sync-flush');
   if (flushBtn) flushBtn.addEventListener('click', () => { flushQueue().then(updateSyncBadge); });
+  const syncNowBtn = document.getElementById('btn-sync-now');
+  if (syncNowBtn) syncNowBtn.addEventListener('click', () => syncNow({ showToast: true, force: true }));
   const upBtn = document.getElementById('btn-sync-upload');
   if (upBtn) upBtn.addEventListener('click', onClickSyncBatchUpload);
   const reBtn = document.getElementById('btn-sync-restore');
@@ -3270,6 +3426,7 @@ async function onClickSyncSave() {
       }
     }
   }
+  setTimeout(() => syncNow({ showToast: false, force: true }), 0);
 }
 
 async function batchUploadAll() {
@@ -3385,61 +3542,22 @@ async function restoreFromCloud() {
   }
 }
 
-// 把雲端中文欄位轉回 PWA 內部結構，並寫入 state.entries
+// 把雲端中文欄位轉回 PWA 內部結構，並覆寫 state.entries（災難復原專用）
 function applyRestoredEntries(entries) {
-  let newAccounts = 0;
-  let newBooks = 0;
+  const counters = { newAccounts: 0, newBooks: 0 };
+  let total = 0;
 
   // 清空現有 entries（保留 books/accounts/schedules）
   for (const b of state.books) state.entries[b] = [];
 
   for (const row of entries) {
-    const type = chineseToType(row.type);
-    if (!type) continue;
-    const book = row.book || state.currentBook;
-    if (!state.books.includes(book)) {
-      state.books.push(book);
-      state.entries[book] = [];
-      newBooks++;
-    }
-    // 帳戶映射（找不到自動建）
-    const ensureAcc = (name) => {
-      if (!name) return null;
-      const existing = findAccountByName(name);
-      if (existing) return existing.id;
-      const newAcc = { id: genId('acc'), name, type: 'cash' };
-      state.accounts.push(newAcc);
-      newAccounts++;
-      return newAcc.id;
-    };
-
-    const e = {
-      id: row.id,
-      type,
-      amount: Number(row.amount) || 0,
-      date: row.date,
-      note: row.note || '',
-      createdAt: Number(row.createdAt) || Date.now(),
-      scheduleId: row.scheduleId || undefined
-    };
-    if (type === 'transfer') {
-      e.fromAccount = ensureAcc(row.fromAccount);
-      e.toAccount = ensureAcc(row.toAccount);
-    } else {
-      // 類別：找不到放 other / other_in
-      const catId = catNameToId(type, row.category);
-      e.category = catId || (type === 'expense' ? 'other' : 'other_in');
-      e.subcategory = row.subcategory || null;
-      e.account = ensureAcc(row.account);
-    }
-    state.entries[book].push(e);
+    const item = cloudRowToLocal(row, counters);
+    if (!item) continue;
+    state.entries[item.book].push(item.entry);
+    total++;
   }
-  // 確保預設帳戶存在
-  if (!state.accounts.some(a => a.isDefault && !a.archived)) {
-    const first = getActiveAccounts()[0];
-    if (first) first.isDefault = true;
-  }
-  return { total: entries.length, newAccounts, newBooks };
+  ensureDefaultAccount();
+  return { total, ...counters };
 }
 
 function openSyncFailedModal() {
@@ -4508,23 +4626,27 @@ function init() {
   // 排程到期檢查
   setTimeout(checkScheduleDue, 50);
 
-  // 上線後嘗試送 queue
-  window.addEventListener('online', () => {
+  // 上線後先補送 queue，再拉回雲端更新
+  window.addEventListener('online', async () => {
     updateSyncBadge();
-    flushQueue();
+    await flushQueue();
+    syncNow({ showToast: false, force: true });
   });
   window.addEventListener('offline', updateSyncBadge);
 
-  // 每 60 秒嘗試 flush；前景切回也嘗試
+  // 每 60 秒補送 queue；每 5 分鐘及切回前景時拉回更新
   setInterval(() => {
     if (navigator.onLine && state.sync.pendingQueue.length > 0) flushQueue();
   }, 60000);
+  setInterval(() => {
+    if (navigator.onLine) syncNow({ showToast: false });
+  }, AUTO_PULL_INTERVAL_MS);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && navigator.onLine) flushQueue();
+    if (!document.hidden && navigator.onLine) syncNow({ showToast: false });
   });
 
-  // 啟動先 flush 一次（可能上次離線留下的 queue）
-  setTimeout(() => { if (navigator.onLine) flushQueue(); }, 1500);
+  // 啟動先補送，再執行一次安全合併
+  setTimeout(() => { if (navigator.onLine) syncNow({ showToast: false, force: true }); }, 1500);
 
   // Service Worker
   if ('serviceWorker' in navigator) {

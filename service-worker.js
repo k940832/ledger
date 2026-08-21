@@ -6,10 +6,11 @@
  *  - 換版本時 activate 階段清掉舊 cache
  */
 
-const CACHE_NAME = 'ledger-v1.5.0';
+const CACHE_NAME = 'ledger-v1.6.0';
 const ASSETS = [
   './',
   './index.html',
+  './sync-core.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
